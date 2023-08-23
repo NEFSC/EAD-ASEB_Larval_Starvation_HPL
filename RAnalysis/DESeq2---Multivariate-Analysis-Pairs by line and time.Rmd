@@ -1,0 +1,415 @@
+---
+title: "Gene Expression response to larval starvation in two genetically disting oyster lines"
+output:
+  html_document:
+    df_print: paged
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+##Load Libraries and Set Working Directory
+library(ggplot2)
+library(DESeq2)
+library(data.table)
+library(dplyr)
+library(reshape2)
+library(pheatmap)
+library(RColorBrewer)
+library(genefilter)            
+
+```{r, load_packages, include=FALSE}
+library(ggplot2)
+library(DESeq2)
+library(data.table)
+library(dplyr)
+library(reshape2)
+library(pheatmap)
+library(RColorBrewer)
+library(genefilter)            
+
+setwd("C:/Users/katherine.mcfarland/Documents/Bioinformatics/DESeq2 - Lola")
+```
+
+
+
+### Load gene(/transcript) count matrix and labels
+
+```{r, results="hide"}
+countData <- as.matrix(read.csv("gene_count_star.csv", header=TRUE, 
+                                sep=",", row.names="gene_id"))
+colData <- read.csv("lola2_phenotype_star.csv", head=T, na.strings=T,
+                    row.names=1)
+
+  colData$Group <- factor(colData$Group)
+  colData$Group<- factor(colData$Group)
+  levels(colData$Group)
+# Setting up and running as a Multivariate test
+dds <- DESeqDataSetFromMatrix(countData = countData,  
+                              colData = colData, 
+                              design = ~ Group) # put the variable of interest at the end of the formula
+dds<-dds[ rowSums(counts(dds)) >1,]
+as.data.frame(colData(dds))
+
+dds <- DESeq(dds, betaPrior = FALSE) #for designs with interactions, recommends setting betaPrior=FALSE
+```
+
+#Prep file for WGCNA
+###Subset to genes with at least five counts in 90% of your samples. This is to remove likely unimportant genes to limit the size of your dataset so the network analysis doesn't crash.
+```{r}
+#Subset to genes with at least five counts in 90% of your samples. This is to remove likely unimportant genes to limit the size of your dataset so the network analysis doesn't crash.
+DESeq.gna = dds[rowSums(counts(dds) >=5) >=23,]
+
+DESeq.gna <- estimateSizeFactors(DESeq.gna)
+sizeFactors(DESeq.gna)
+counts.gna_normalized <- counts(DESeq.gna, normalized = TRUE)
+wgcna.log = log2(counts.gna_normalized + 1)
+
+
+write.csv(wgcna.log, "lognormcountsforWGCNA.csv", row.names=TRUE)
+```
+
+
+#Make the DESeq2 files ready for WGCNA input
+```{r}
+####
+DESeq.ds <- DESeqDataSetFromMatrix(countData = countData,  colData = colData, design = ~ Group)
+#Subset to genes with at least five counts in 90% of your samples. This is to remove likely unimportant genes to limit the size of your dataset so the network analysis doesn't crash.
+DESeq.gna = DESeqDataSetFromMatrix[rowSums(counts(DESeq.gna) >=5) >=24,]
+
+DESeq.gna <- estimateSizeFactors(DESeq.gna)
+sizeFactors(DESeq.gna)
+counts.gna_normalized <- counts(DESeq.gna, normalized = TRUE)
+wgcna.log = log2(counts.gna_normalized + 1)
+write.csv(wgcna.log,"lognormcountsforWGCNA.csv")
+
+
+```
+
+
+#Make the DESeq2 files ready for WGCNA input
+```{r}
+####
+DESeq.ds <- DESeqDataSetFromMatrix(countData = countData_wildt3,  colData = colData_wildt3, design = ~ Group)
+#Subset to genes with at least five counts in 90% of your samples. This is to remove likely unimportant genes to limit the size of your dataset so the network analysis doesn't crash.
+DESeq.gna = DESeqDataSetFromMatrix[rowSums(counts(DESeq.gna) >=5) >=23,]
+
+DESeq.gna <- estimateSizeFactors(DESeq.gna)
+sizeFactors(DESeq.gna)
+counts.gna_normalized <- counts(DESeq.gna, normalized = TRUE)
+wgcna.log = log2(counts.gna_normalized + 1)
+write.csv(wgcna.log,"lognormcountsforWGCNA_wildt3.csv")
+
+```
+
+
+
+
+
+## Plot to Visialize the Plots
+```{r}
+rld <- rlog(dds) #regularized-logarithm transformation
+
+par( mfrow = c( 1, 2 ) )
+dds <- estimateSizeFactors(dds)
+
+sampleDists <- dist( t( assay(rld) ) )
+
+sampleDistMatrix <- as.matrix( sampleDists )
+rownames(sampleDistMatrix) <- paste( rld$Group, sep="-" )
+colnames(sampleDistMatrix) <- NULL
+colors <- colorRampPalette( rev(brewer.pal(9, "Blues")) )(255)
+pheatmap(sampleDistMatrix,
+         clustering_distance_rows=sampleDists,
+         clustering_distance_cols=sampleDists,
+         col=colors)
+
+plotPCA(rld, intgroup = c("Group"))
+
+#Gene Clustering
+topVarGenes <- head(order(-rowVars(assay(rld))),20)
+mat <- assay(rld)[ topVarGenes, ]
+mat <- mat - rowMeans(mat)
+df <- as.data.frame(colData(rld)[,c("Line", "Treatment","Day")])
+all<-pheatmap(mat, annotation_col=df)
+
+
+```
+
+## Organize and filter results
+```{r, results="hide"}
+#Extract contrasts between control and treatment values for interaction
+res <- results(dds)
+#head(res)
+#Sort summary list by p-value
+res <- res[order(res$padj),]
+#head(res)
+#summary(res)
+#Change and lower the false discovery rate threshold (padj) and get counts
+res.05 <- results(dds, alpha=.05)
+table(res.05$padj < .05)
+#summry(res.05$padj < .05, na.rm=TRUE)
+#Find the number of deg's  with a ofld change >2
+resOrdered <- res.05[order(res.05$padj),]
+sig <- resOrdered[!is.na(resOrdered$padj) &
+                    resOrdered$padj<0.05 &
+                    abs(resOrdered$log2FoldChange)>=1,]
+
+
+### Break Down Contrasts
+
+# Contrast by Treatments for Wild only at T = 3
+res_c <- results(dds, contrast = c("Group", "wildstarved_3", "wildfed_3"))
+#head(res_c)
+res_c <- res_c[order(res_c$padj),]
+#head(res_c)
+#summary(res_c$padj <0.05, na.rm = TRUE)
+resOrdered_c <- res_c[order(res_c$padj),]
+sig_Wild_fed_vs_starved.t3 <- resOrdered_c[!is.na(resOrdered_c$padj) &
+                         resOrdered_c$padj<0.05 &
+                         abs(resOrdered_c$log2FoldChange)>=1,] #Find the number of deg's with fold change > 2
+
+# Contrast by Treatments for Lola only at T = 3
+res_c <- results(dds, contrast = c("Group", "lolastarved_3", "lolafed_3"))
+#head(res_c)
+res_c <- res_c[order(res_c$padj),]
+#head(res_c)
+#summary(res_c$padj <0.05, na.rm = TRUE)
+resOrdered_c <- res_c[order(res_c$padj),]
+sig_Lola_fed_vs_starved.t3 <- resOrdered_c[!is.na(resOrdered_c$padj) &
+                                             resOrdered_c$padj<0.05 &
+                                             abs(resOrdered_c$log2FoldChange)>=1,] #Find the number of deg's with fold change > 2
+
+# Contrast by Treatments for Wild only at T = 8
+res_c <- results(dds, contrast = c("Group", "wildstarved_8", "wildfed_8"))
+#head(res_c)
+res_c <- res_c[order(res_c$padj),]
+#head(res_c)
+#summary(res_c$padj <0.05, na.rm = TRUE)
+resOrdered_c <- res_c[order(res_c$padj),]
+sig_Wild_fed_vs_starved.t8 <- resOrdered_c[!is.na(resOrdered_c$padj) &
+                                             resOrdered_c$padj<0.05 &
+                                             abs(resOrdered_c$log2FoldChange)>=1,] #Find the number of deg's with fold change > 2
+
+# Contrast by Treatments for Lola only at T = 8
+res_c <- results(dds, contrast = c("Group", "lolastarved_8", "lolafed_8"))
+#head(res_c)
+res_c <- res_c[order(res_c$padj),]
+#head(res_c)
+#summary(res_c$padj <0.05, na.rm = TRUE)
+resOrdered_c <- res_c[order(res_c$padj),]
+sig_Lola_fed_vs_starved.t8 <- resOrdered_c[!is.na(resOrdered_c$padj) &
+                                             resOrdered_c$padj<0.05 &
+                                             abs(resOrdered_c$log2FoldChange)>=1,] #Find the number of deg's with fold change > 2
+
+```
+
+#Summary of all results on up and down regulation 
+```{r}
+
+  summary(sig_Wild_fed_vs_starved.t3)
+  summary(sig_Lola_fed_vs_starved.t3)
+  summary(sig_Wild_fed_vs_starved.t8)
+  summary(sig_Lola_fed_vs_starved.t8)
+
+  
+```  
+
+
+#Heatmaps: Pairs: Fed v. Starved within Line for each time
+```{r}
+#Pairs: Wild t3 Fed vs. Starved
+countData_wildt3 <- as.matrix(read.csv("gene_count_star_wildt3.csv", header=TRUE, 
+                                     sep=",", row.names="gene_id"))
+colData_wildt3 <- read.csv("lola2_phenotype_star_wildt3.csv", head=T, na.strings=T,
+                         row.names=1)
+  colData_wildt3$Treatment <- factor(colData_wildt3$Treatment)
+  levels(colData_wildt3$Treatment)
+dds_wildt3 <- DESeqDataSetFromMatrix(countData = countData_wildt3,  
+                                   colData = colData_wildt3, 
+                                   design = ~Treatment)
+dds_wildt3<-dds_wildt3[ rowSums(counts(dds_wildt3)) >1,]
+  as.data.frame( colData(dds_wildt3) )
+dds_wildt3 <- DESeq(dds_wildt3, betaPrior = FALSE) #for designs with interactions, recommends setting betaPrior=FALSE
+  
+  
+
+#Pairs: Wild t8 Fed vs. Starved
+countData_wildt8 <- as.matrix(read.csv("gene_count_star_wildt8.csv", header=TRUE, 
+                                     sep=",", row.names="gene_id"))
+colData_wildt8 <- read.csv("lola2_phenotype_star_wildt8.csv", head=T, na.strings=T,
+                         row.names=1)
+  colData_wildt8$Treatment <- factor(colData_wildt8$Treatment)
+  levels(colData_wildt8$Treatment)
+dds_wildt8 <- DESeqDataSetFromMatrix(countData = countData_wildt8,  
+                                   colData = colData_wildt8, 
+                                   design = ~Treatment)
+dds_wildt8<-dds_wildt8[ rowSums(counts(dds_wildt8)) >1,]
+  as.data.frame( colData(dds_wildt8) )
+dds_wildt8 <- DESeq(dds_wildt8, betaPrior = FALSE) #for designs with interactions, recommends setting betaPrior=FALSE
+
+##
+#Pairs: Lola t3 Fed vs. Starved
+countData_lolat3 <- as.matrix(read.csv("gene_count_star_lolat3.csv", header=TRUE, 
+                                     sep=",", row.names="gene_id"))
+colData_lolat3 <- read.csv("lola2_phenotype_star_lolat3.csv", head=T, na.strings=T,
+                         row.names=1)
+  colData_lolat3$Treatment <- factor(colData_lolat3$Treatment)
+  levels(colData_lolat3$Treatment)
+dds_lolat3 <- DESeqDataSetFromMatrix(countData = countData_lolat3,  
+                                   colData = colData_lolat3, 
+                                   design = ~Treatment)
+dds_lolat3<-dds_lolat3[ rowSums(counts(dds_lolat3)) >1,]
+  as.data.frame( colData(dds_lolat3) )
+dds_lolat3 <- DESeq(dds_lolat3, betaPrior = FALSE) #for designs with interactions, recommends setting betaPrior=FALSE
+
+#Pairs: Lola t8 Fed vs. Starved
+countData_lolat8 <- as.matrix(read.csv("gene_count_star_lolat8.csv", header=TRUE, 
+                                     sep=",", row.names="gene_id"))
+colData_lolat8 <- read.csv("lola2_phenotype_star_lolat8.csv", head=T, na.strings=T,
+                         row.names=1)
+  colData_lolat8$Treatment <- factor(colData_lolat8$Treatment)
+  levels(colData_lolat8$Treatment)
+dds_lolat8 <- DESeqDataSetFromMatrix(countData = countData_lolat8,  
+                                   colData = colData_lolat8, 
+                                   design = ~Treatment)
+dds_lolat8<-dds_lolat8[ rowSums(counts(dds_lolat8)) >1,]
+  as.data.frame( colData(dds_lolat8) )
+dds_lolat8 <- DESeq(dds_lolat8, betaPrior = FALSE) #for designs with interactions, recommends setting betaPrior=FALSE
+
+
+```
+
+
+# Make WGCNA output files
+```{r}
+## wild t3
+  #Subset to genes with at least five counts in 90% of your samples. This is to remove likely unimportant genes to limit the size of your dataset so the network analysis doesn't crash.
+DESeq.gna = dds_wildt3[rowSums(counts(dds_wildt3) >=5) >=5,]
+
+DESeq.gna <- estimateSizeFactors(DESeq.gna)
+sizeFactors(DESeq.gna)
+counts.gna_normalized <- counts(DESeq.gna, normalized = TRUE)
+wgcna.log_wildt3 = log2(counts.gna_normalized + 1)
+
+write.csv(wgcna.log_wildt3, "lognormcountsforWGCNA_wildt3.csv", row.names=TRUE)
+
+## wild t8
+  #Subset to genes with at least five counts in 90% of your samples. This is to remove likely unimportant genes to limit the size of your dataset so the network analysis doesn't crash.
+DESeq.gna = dds_wildt8[rowSums(counts(dds_wildt8) >=5) >=5,]
+
+DESeq.gna <- estimateSizeFactors(DESeq.gna)
+sizeFactors(DESeq.gna)
+counts.gna_normalized <- counts(DESeq.gna, normalized = TRUE)
+wgcna.log_wildt8 = log2(counts.gna_normalized + 1)
+
+write.csv(wgcna.log_wildt8, "lognormcountsforWGCNA_wildt8.csv", row.names=TRUE)
+
+
+## Lola t3
+  #Subset to genes with at least five counts in 90% of your samples. This is to remove likely unimportant genes to limit the size of your dataset so the network analysis doesn't crash.
+DESeq.gna = dds_lolat3[rowSums(counts(dds_lolat3) >=5) >=5,]
+
+DESeq.gna <- estimateSizeFactors(DESeq.gna)
+sizeFactors(DESeq.gna)
+counts.gna_normalized <- counts(DESeq.gna, normalized = TRUE)
+wgcna.log_lolat3 = log2(counts.gna_normalized + 1)
+
+write.csv(wgcna.log_lolat3, "lognormcountsforWGCNA_lolat3.csv", row.names=TRUE)
+
+## Lola t8
+  #Subset to genes with at least five counts in 90% of your samples. This is to remove likely unimportant genes to limit the size of your dataset so the network analysis doesn't crash.
+DESeq.gna = dds_lolat8[rowSums(counts(dds_lolat8) >=5) >=5,]
+
+DESeq.gna <- estimateSizeFactors(DESeq.gna)
+sizeFactors(DESeq.gna)
+counts.gna_normalized <- counts(DESeq.gna, normalized = TRUE)
+wgcna.log_lolat8 = log2(counts.gna_normalized + 1)
+
+write.csv(wgcna.log_lolat8, "lognormcountsforWGCNA_lolat8.csv", row.names=TRUE)
+
+```
+
+
+# Plot the Results
+```{r}
+#### Wild t3
+rld <- rlog(dds_wildt3)
+par( mfrow = c( 1, 2 ) )
+dds_wildt3 <- estimateSizeFactors(dds_wildt3)
+
+plotPCA(rld, intgroup = c("Group"))
+
+topVarGenes <- head(order(-rowVars(assay(rld))),20)
+mat <- assay(rld)[ topVarGenes, ]
+mat <- mat - rowMeans(mat)
+df <- as.data.frame(colData(rld)[,c("Line", "Treatment","Day")])
+wildt3<-pheatmap(mat, annotation_col=df)
+
+
+#### Wild t8
+rld <- rlog(dds_wildt8)
+par( mfrow = c( 1, 2 ) )
+dds_wildt8 <- estimateSizeFactors(dds_wildt8)
+
+plotPCA(rld, intgroup = c("Group"))
+
+topVarGenes <- head(order(-rowVars(assay(rld))),20)
+mat <- assay(rld)[ topVarGenes, ]
+mat <- mat - rowMeans(mat)
+df <- as.data.frame(colData(rld)[,c("Line", "Treatment","Day")])
+wildt8<-pheatmap(mat, annotation_col=df)
+
+#### Lola t3
+rld <- rlog(dds_lolat3)
+par( mfrow = c( 1, 2 ) )
+dds_lolat3 <- estimateSizeFactors(dds_lolat3)
+
+plotPCA(rld, intgroup = c("Group"))
+
+topVarGenes <- head(order(-rowVars(assay(rld))),20)
+mat <- assay(rld)[ topVarGenes, ]
+mat <- mat - rowMeans(mat)
+df <- as.data.frame(colData(rld)[,c("Line", "Treatment","Day")])
+wildt3<-pheatmap(mat, annotation_col=df)
+
+
+#### Lola t8
+rld <- rlog(dds_lolat8)
+par( mfrow = c( 1, 2 ) )
+dds_lolat8 <- estimateSizeFactors(dds_lolat8)
+
+plotPCA(rld, intgroup = c("Group"))
+
+topVarGenes <- head(order(-rowVars(assay(rld))),20)
+mat <- assay(rld)[ topVarGenes, ]
+mat <- mat - rowMeans(mat)
+df <- as.data.frame(colData(rld)[,c("Line", "Treatment","Day")])
+lolat8<-pheatmap(mat, annotation_col=df)
+
+
+```
+
+
+
+
+
+
+
+
+
+
+###Print session infor for log
+```{r}
+sessionInfo()
+```
+
+

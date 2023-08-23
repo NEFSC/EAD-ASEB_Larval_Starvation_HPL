@@ -1,0 +1,648 @@
+---
+title: "WGCNA Lola t 3 fed vs. starved"
+author: "Katie McFarland"
+date: "11/3/2021"
+output: html_document
+---
+
+WGCNA tutorial: https://horvath.genetics.ucla.edu/html/CoexpressionNetwork/Rpackages/WGCNA/Tutorials/index.html
+Inatall inforamation:
+ Prerequisists:
+  install.packages(c("matrixStats", "Hmisc", "splines", "foreach", "doParallel", "fastcluster", "dynamicTreeCut", "survival")
+  source("http://bioconductor.org/biocLite.R")
+  biocLite(c("GO.db", "preprocessCore", "impute"))
+                 orgCodes = c("Hs", "Mm", "Rn", "Pf", "Sc", "Dm", "Bt", "Ce", "Cf", "Dr", "Gg");
+                 orgExtensions = c(rep(".eg", 4), ".sgd", rep(".eg", 6));
+                 packageNames = paste("org.", orgCodes, orgExtensions, ".db", sep="");
+                 biocLite(c("GO.db", "KEGG.db", "topGO", packageNames, "hgu133a.db", "hgu95av2.db", "annotate", "hgu133plus2.db", "SNPlocs.Hsapiens.dbSNP.20100427", "minet", "OrderedList"))
+ WGCNA:
+   install.packages("BiocManager") # only need if not already installed 
+   BiocManager::install("WGCNA")
+ 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Setting up the R session
+
+```{r}
+workingDir="C:/Users/katherine.mcfarland/Documents/Bioinformatics/DESeq2 - Lola/WGCNA" 
+setwd(workingDir)
+```
+
+
+The final line of code is important. Do not omit!
+
+```{r, load_packages, include=FALSE}
+library(WGCNA)
+options(stringsAsFactors=FALSE)
+```
+
+
+
+Import the log-normalized gene count data, trait data, and transpose the count data. Then check normalized gene data to confirm no missing values (should say TRUE)
+If the last statement returns TRUE, all genes have passed the cuts. If not, we remove the offending genes and samples
+from the data:(See tutorial if you need to remove https://horvath.genetics.ucla.edu/html/CoexpressionNetwork/Rpackages/WGCNA/Tutorials/FemaleLiver-01-dataInput.pdf)
+
+```{r}
+expDat=read.csv("C:/Users/katherine.mcfarland/Documents/Bioinformatics/DESeq2 - Lola/WGCNA/lognormcountsforWGCNA_lolat3.csv",head=T)
+colDat=read.csv("C:/Users/katherine.mcfarland/Documents/Bioinformatics/DESeq2 - Lola/WGCNA/SummaryforWGCNAtreat_lolat3.csv", head=T, na.strings=T)
+expDatRowNames=expDat$X
+expDat=expDat[,c(2:7)]
+row.names(expDat) = expDatRowNames
+expDat.t=t(expDat)
+gsg = goodSamplesGenes(expDat.t, verbose = 3)
+gsg$allOK
+```
+
+```{r}
+# Define a categorical variable with 3 levels
+Group = rep(c("1", "2", "3", "4", "5", "6"), each = 6);
+# Binarize it into pairwise indicators
+out = binarizeCategoricalVariable(Group,
+includePairwise = TRUE,
+includeLevelVsAll = FALSE);
+# Print the variable and the indicators
+data.frame(Group, out);
+```
+
+
+
+```{r}
+#colDat$Line <- as.numeric(colDat$Line)
+colDat$Treatment <- as.numeric(colDat$Treatment)
+#colDat$Day <- as.numeric(colDat$Day)
+#colDat$Group <- as.numeric(colDat$Group)
+```
+
+Cluster the samples to see if there are any outliers. No evident outliers (something with a height far outside the others would indicate an issue)
+
+```{r}
+sampleTree <-  hclust(dist(expDat.t), method = "average");
+# Plot the sample tree: Open a graphic output window of size 12 by 9 inches
+# The user should change the dimensions if the window is too large or too small.
+sizeGrWindow(12,9)
+#pdf(file = "Plots/sampleClustering.pdf", width = 12, height = 9);
+par(cex = 0.6);
+par(mar = c(0,4,2,0))
+plot(sampleTree, main = "Sample clustering to detect outliers", sub="", xlab="", cex.lab = 1.5, 
+     cex.axis = 1.5, cex.main = 2)
+```
+
+Input sample data.
+
+```{r}
+Sample_ID = rownames(expDat.t)
+traitRows = match(Sample_ID, colDat$Sample.ID)
+datTraits = colDat[traitRows, -1]
+rownames(datTraits) = colDat[traitRows, 1]
+collectGarbage()
+```
+
+Trying a couple of different clustering approaches. Ward.D2 looks to be the best for my data.
+
+```{r}
+sampleTree = hclust(dist(expDat.t), method = "average")
+sampleTree1 = hclust(dist(expDat.t), method = "centroid")
+sampleTree2 = hclust(dist(expDat.t), method = "ward.D2")
+sampleTree3 = hclust(dist(expDat.t), method = "median")
+# Storing them as a list
+trees <- list(sampleTree,sampleTree1,
+              sampleTree2,sampleTree3)
+# Vector of the different clustering approaches
+approaches <- c("Average","Centroid","Ward.D2","Median")
+
+plot(sampleTree)
+plot(sampleTree1)
+plot(sampleTree2)
+plot(sampleTree3)
+```
+
+Before we can begin network construction and module detection, we visualize how the traits relate to the dendrogram.
+The data for the traits must be numeric for this to work. I converted my categorical data to integers. Site type: 0=normoxic, 1=hypoxic, Site: CP=1, HC=2, HP=3, NA=4, NM=5, RP=6, Treatment:0=normoxic, 1=hypoxic
+For Trait Data
+  Treatment: 0=fed, 1=starved
+
+        
+        
+        Changed method from Ward.D2 to average based on the sample trees above
+        
+```{r}
+# Re-cluster samples
+sampleTree2 = hclust(dist(expDat.t), method = "average")
+# Convert traits to a color representation: white means low, red means high, grey means missing entry 
+traitColors = numbers2colors(datTraits, signed = FALSE)
+# Plot the sample dendrogram and the colors underneath.
+plotDendroAndColors(sampleTree2, traitColors,
+                  groupLabels = names(datTraits),
+                  main = "Sample dendrogram and trait heatmap")
+```
+
+Save the expression and trait data for the next part of the analysis.
+
+```{r}
+save(expDat.t, datTraits, file = "CVexpression_dataInput_lolat3.RData")
+```
+
+Load the data
+
+```{r}
+lnames = load(file = "CVexpression_dataInput_lolat3.RData")
+lnames
+```
+
+#### Choosing the soft-thresholding power: analysis of network topology  
+
+From the tutorial: Constructing a weighted gene network entails the choice of the soft thresholding power β to which co-expression similarity is raised to calculate adjacency. The authors of have proposed to choose the soft thresholding power based on the criterion of approximate scale-free topology. We refer the reader to that work for more details; here we illustrate the use of the function pickSoftThreshold that performs the analysis of network topology and aids the user in choosing a proper soft-thresholding power. The user chooses a set of candidate powers (the function provides suitable default values), and the function returns a set of network indices that should be inspected, for example as follows:
+
+Note: This analysis can take some time depending on the number of genes. Once complete, you're looking for the soft threshold power where 90% of the data is explained (i.e. the number corresponding to the first number above the red abline. My value is 4.)
+
+```{r}
+# Choose a set of soft-thresholding powers
+powers = c(c(1:10), seq(from = 12, to=20, by=2))
+# Call the network topology analysis function
+sft = pickSoftThreshold(expDat.t, powerVector = powers, verbose = 5)
+# Plot the results:
+sizeGrWindow(9, 5)
+par(mfrow = c(1,2));
+cex1 = 0.9;
+# Scale-free topology fit index as a function of the soft-thresholding power
+plot(sft$fitIndices[,1], -sign(sft$fitIndices[,3])*sft$fitIndices[,2],
+     xlab="Soft Threshold (power)",ylab="Scale Free Topology Model Fit,signed R^2",type="n",
+     main = paste("Scale independence"));
+text(sft$fitIndices[,1], -sign(sft$fitIndices[,3])*sft$fitIndices[,2],
+     labels=powers,cex=cex1,col="red");
+# this line corresponds to using an R^2 cut-off of h
+abline(h=0.90,col="red")
+# Mean connectivity as a function of the soft-thresholding power
+plot(sft$fitIndices[,1], sft$fitIndices[,5],
+     xlab="Soft Threshold (power)",ylab="Mean Connectivity", type="n",
+     main = paste("Mean connectivity"))
+text(sft$fitIndices[,1], sft$fitIndices[,5], labels=powers, cex=cex1,col="red")
+```
+
+Calculate the adjacencies using a soft thresholding power of 4 for my analysis (as determined above). To minimize effects of noise and spurious associations, transform the adjacency into Topological Overlap Matrix and calculate the corresponding dissimilarity.
+
+  - changed softPower to 10 (from 4) 
+```{r}
+ softPower = 10
+adjacency = adjacency(expDat.t, power = softPower)
+# Turn adjacency into topological overlap
+TOM = TOMsimilarity(adjacency)
+dissTOM = 1-TOM
+```
+
+Call the hierarchical clustering function. From the tutorial: In the clustering tree (dendrogram), each leaf, that is a short vertical line, corresponds to a gene. Branches of the dendrogram group together densely interconnected, highly co-expressed genes. Module identification amounts to the identification of individual branches (”cutting the branches off the dendrogram”). There are several methods for branch cutting; our standard method is the Dynamic Tree Cut from the package dynamicTreeCut. The next snippet of code illustrates its use.
+
+```{r}
+geneTree = hclust(as.dist(dissTOM), method = "average")
+# Plot the resulting clustering tree (dendrogram)
+plot(geneTree, xlab="", sub="", main = "Gene clustering on TOM-based dissimilarity",
+     labels = FALSE, hang = 0.04)
+geneTree2 = hclust(as.dist(dissTOM), method = "average")
+# Plot the resulting clustering tree (dendrogram)
+plot(geneTree2, xlab="", sub="", main = "Gene clustering on TOM-based dissimilarity",
+     labels = FALSE, hang = 0.04)
+```
+
+Creating the modules. Large modules are preferred so the minimum module size is set to a high number (30). 
+
+The function resulted in 15 modules. Label 0 corresponds to unassigned genes. The output provides the size of each module (number of genes).
+
+```{r}
+minModuleSize = 30
+# Module identification using dynamic tree cut:
+dynamicMods = cutreeDynamic(dendro = geneTree, distM = dissTOM,
+                            deepSplit = 2, pamRespectsDendro = FALSE,
+                            minClusterSize = minModuleSize)
+table(dynamicMods)
+```
+
+Plot the module assignment under the gene dendrogram.
+
+```{r}
+# Convert numeric labels into colors
+dynamicColors = labels2colors(dynamicMods)
+table(dynamicColors)
+# Plot the dendrogram and colors underneath
+sizeGrWindow(8,6)
+plotDendroAndColors(geneTree, dynamicColors, "Dynamic Tree Cut", dendroLabels = FALSE, hang = 0.03, addGuide = TRUE, guideHang = 0.05, main = "Gene dendrogram and module colors")
+```
+
+Merge modules whose expression profiles are very similar. Some modules may have expression profiles that are very similar. It may be prudent to merge these modules as their genes are highly co-expressed. To quantify co-expression similarity of entire modules, we calculate their eigengenes and cluster them on their correlation.
+
+```{r}
+# Calculate eigengenes
+MEList = moduleEigengenes(expDat.t, colors = dynamicColors) 
+MEs = MEList$eigengenes
+# Calculate dissimilarity of module eigengenes
+MEDiss = 1-cor(MEs);
+# Cluster module eigengenes
+METree = hclust(as.dist(MEDiss), method = "average"); # Plot the result
+sizeGrWindow(7, 6)
+plot(METree, main = "Clustering of module eigengenes", xlab = "", sub = "")
+#Use a height cut of 0.25, corresponding to a correlation of 0.75, to merge
+MEDissThres = 0.25
+# Plot the cut line into the dendrogram
+abline(h=MEDissThres, col = "red")
+# Call an automatic merging function
+merge = mergeCloseModules(expDat.t, dynamicColors, cutHeight = MEDissThres, verbose = 3)
+# The merged module colors
+mergedColors = merge$colors
+# Eigengenes of the new merged modules:
+mergedMEs = merge$newMEs
+```
+
+Replot the dendrogram with the merged modules to compare to the original. The bottom colors correspond to the merged modules.
+
+```{r}
+plotDendroAndColors(geneTree, cbind(dynamicColors, mergedColors),
+c("Dynamic Tree Cut", "Merged dynamic"), dendroLabels = FALSE, hang = 0.03, addGuide = TRUE, guideHang = 0.05)
+```
+
+In the subsequent analysis, we will use the merged module colors in mergedColors. We save the relevant variables for use in subsequent parts of the tutorial:
+
+```{r}
+# Rename to moduleColors
+moduleColors = mergedColors
+# Construct numerical labels corresponding to the colors
+colorOrder = c("grey", standardColors(50))
+moduleLabels = match(moduleColors, colorOrder)-1
+MEs = mergedMEs
+# Save module colors and labels for use in subsequent parts
+save(MEs, moduleLabels, moduleColors, geneTree, file = "CV-networkConstruction-stepByStep_lolat3.RData")
+```
+
+## Relating modules to traits
+
+Load variables
+
+```{r}
+lnames = load(file = "CVexpression_dataInput_lolat3.RData")
+#The variable lnames contains the names of loaded variables.
+lnames
+# Load network data saved in the second part.
+lnames = load(file = "CV-networkConstruction-stepByStep_lolat3.RData")
+lnames
+```
+
+In this analysis, I'm identifying modules that are significantly associated with traits. I will correlate eigengenes with traits and look for the most significant associations.
+
+```{r}
+# Define numbers of genes and samples
+nGenes = ncol(expDat.t)
+nSamples = nrow(expDat.t)
+# Recalculate MEs with color labels
+MEs0 = moduleEigengenes(expDat.t, moduleColors)$eigengenes
+MEs = orderMEs(MEs0)
+moduleTraitCor = cor(MEs, datTraits, use = "p")
+moduleTraitPvalue = corPvalueStudent(moduleTraitCor, nSamples)
+```
+
+Using a graphical representation to read the table. Color coding each association by the correlation value.
+
+```{r}
+sizeGrWindow(10,6)
+# Will display correlations and their p-values
+textMatrix = paste(signif(moduleTraitCor, 2), "\n(",
+                        signif(moduleTraitPvalue, 1), ")", sep = "");
+dim(textMatrix) = dim(moduleTraitCor)
+par(mar = c(6, 8.5, 3, 3))
+# Display the correlation values within a heatmap plot 
+labeledHeatmap(Matrix = moduleTraitCor,
+             xLabels = names(datTraits),
+             yLabels = names(MEs),
+             ySymbols = names(MEs),
+             colorLabels = FALSE,
+colors = greenWhiteRed(50), textMatrix = textMatrix, setStdMargins = FALSE, cex.text = 0.5,
+zlim = c(-1,1),
+main = paste("Module-trait relationships"))
+```
+
+Quantify associations of individual genes with trait of interest (treatment) by defining Gene Significance (GS) as (the absolute value of) the correlation between the gene and the trait. For each module, define a quantitative measure of module membership (MM) as the correlation of the module eigengene and the gene expression profile. This allows us to quantify the similarity of all genes on the array to every module.
+
+```{r}
+# Define variable treatment containing the treatment column of datTrait
+treatment = as.data.frame(datTraits$Treatment)
+names(treatment) = "Treatment"
+# names (colors) of the modules
+modNames = substring(names(MEs), 3)
+geneModuleMembership = as.data.frame(cor(expDat.t, MEs, use = "p"))
+MMPvalue = as.data.frame(corPvalueStudent(as.matrix(geneModuleMembership), nSamples))
+names(geneModuleMembership) = paste("MM", modNames, sep="")
+names(MMPvalue) = paste("p.MM", modNames, sep="")
+geneTraitSignificance = as.data.frame(cor(expDat.t, treatment, use = "p"))
+GSPvalue = as.data.frame(corPvalueStudent(as.matrix(geneTraitSignificance), nSamples))
+names(geneTraitSignificance) = paste("GS.", names(treatment), sep="")
+names(GSPvalue) = paste("p.GS.", names(treatment), sep="")
+```
+
+Using the GS and MM measures, we can identify genes that have a high significance for treatment as well as high module membership in interesting modules. As an example, we look at the blue module that has the highest association with treatment. We plot a scatterplot of Gene Significance vs. Module Membership in the blue module. Clearly, GS and MM are highly correlated, illustrating that genes highly significantly associated with a trait are often also the most important (central) elements of modules associated with the trait
+
+```{r}
+module = "greenyellow"
+column = match(module, modNames)
+moduleGenes = moduleColors==module
+sizeGrWindow(7, 7)
+par(mfrow = c(1,1))
+verboseScatterplot(abs(geneModuleMembership[moduleGenes, column]),
+                   abs(geneTraitSignificance[moduleGenes, 1]),
+                   xlab = paste("Module Membership in", module, "module"),
+                   ylab = "Gene significance for treatment",
+                   main = paste("Module membership vs. gene significance\n"), 
+                   cex.main = 1.2, cex.lab = 1.2, cex.axis = 1.2, col = module)
+```
+
+```{r}
+module = "turquoise"
+column = match(module, modNames)
+moduleGenes = moduleColors==module
+sizeGrWindow(7, 7)
+par(mfrow = c(1,1))
+verboseScatterplot(abs(geneModuleMembership[moduleGenes, column]),
+                   abs(geneTraitSignificance[moduleGenes, 1]),
+                   xlab = paste("Module Membership in", module, "module"),
+                   ylab = "Gene significance for treatment",
+                   main = paste("Module membership vs. gene significance\n"), 
+                   cex.main = 1.2, cex.lab = 1.2, cex.axis = 1.2, col = module)
+```
+```{r}
+module = "lightyellow"
+column = match(module, modNames)
+moduleGenes = moduleColors==module
+sizeGrWindow(7, 7)
+par(mfrow = c(1,1))
+verboseScatterplot(abs(geneModuleMembership[moduleGenes, column]),
+                   abs(geneTraitSignificance[moduleGenes, 1]),
+                   xlab = paste("Module Membership in", module, "module"),
+                   ylab = "Gene significance for treatment",
+                   main = paste("Module membership vs. gene significance\n"), 
+                   cex.main = 1.2, cex.lab = 1.2, cex.axis = 1.2, col = module)
+```
+
+We have found modules with high association with our trait of interest, and have identified their central players by the Module Membership measure. We now merge this statistical information with gene annotation and write out a file that summarizes the most important results.
+
+```{r}
+colnames(expDat.t)
+colnames(expDat.t)[moduleColors=="greenyellow"]
+```
+We now want to link the gene information from the GO XP file to the genes identified as being important in each of the modules.
+
+```{r}
+annot = read.csv("GO_XP.csv",head=T)
+dim(annot)
+names(annot)
+genes = colnames(expDat.t)
+probes2annot = match(genes, annot$GeneID)
+# The following is the number of probes without annotation:
+sum(is.na(probes2annot))
+# Should return zero, but it doesn't for me. I get 234.
+```
+
+We now create a data frame holding the following information for all genes: GeneID, protein product, protein name, module color, gene significance for treatment, and module membership and p-values in all modules. The modules will be ordered by their significance for treatment, with the most significant ones to the left.
+
+```{r}
+#Create the starting data frame
+geneInfo0 = data.frame(Gene.ID = genes,
+                       Protein.Product = annot$Protein_product[probes2annot],
+                       Protein.Name = annot$Protein_name[probes2annot],
+                       module.Color = moduleColors,
+                       geneTraitSignificance,
+                       GSPvalue)
+# Order modules by their significance for weight
+modOrder = order(-abs(cor(MEs, treatment, use = "p")))
+# Add module membership information in the chosen order 
+for (mod in 1:ncol(geneModuleMembership))
+{
+  oldNames = names(geneInfo0)
+  geneInfo0 = data.frame(geneInfo0, geneModuleMembership[, modOrder[mod]], 
+                         MMPvalue[, modOrder[mod]]);
+  names(geneInfo0) = c(oldNames, paste("MM.", modNames[modOrder[mod]], sep=""),
+                       paste("p.MM.", modNames[modOrder[mod]], sep=""))
+}
+# Order the genes in the geneInfo variable first by module color, then by geneTraitSignificance
+geneOrder = order(geneInfo0$module.Color, -abs(geneInfo0$GS.Treatment))
+geneInfo = geneInfo0[geneOrder, ]
+```
+
+Write the output into a text file.
+
+```{r}
+write.csv(geneInfo, file = "WGCNAgeneInfo_treat_OUT_withPHYS_lolat3.csv")
+```
+
+Export a list of just the gene identifiers from the top modules. Each module will have its own output text file listing the top genes from that module.
+
+```{r}
+#setwd("C:/Users/katherine.mcfarland/Documents/Bioinformatics/DESeq2 - Lola/WGCNA")
+# Get the corresponding GeneIDs
+allgeneIDs = annot$GeneID[probes2annot];
+# $ Choose interesting modules
+intModules = c("cyan", "greenyellow", "darkgreen", "darkorange")
+for (module in intModules)
+{
+  # Select module probes
+  modGenes = (moduleColors==module)
+  # Get their entrez ID codes
+  modgeneIDs = allgeneIDs[modGenes];
+  # Write them into a file
+fileName = paste("C:/Users/katherine.mcfarland/Documents/Bioinformatics/DESeq2 - Lola/GeneIDsTreatment/GeneIDs-", module, ".txt", sep="")
+  write.table(as.data.frame(modgeneIDs), file = fileName,
+              row.names = FALSE, col.names = FALSE)
+}
+
+#As background in the enrichment analysis, we will use all genes in the analysis.
+fileName = paste("C:/Users/katherine.mcfarland/Documents/Bioinformatics/DESeq2 - Lola/GeneIDs-all_lolat3.txt", sep="")
+write.table(as.data.frame(allgeneIDs), file = fileName, row.names = FALSE, col.names = FALSE)
+```
+
+## Extract module membership values for GO-MWU
+
+```{r}
+MEs_all = moduleEigengenes(expDat.t, moduleColors)
+nSamples = nrow(expDat.t)
+datME = moduleEigengenes(expDat.t, moduleColors)$eigengenes
+geneList = colnames(expDat.t)
+MEs = orderMEs(MEs0)
+# Calculate correlation among target variables and modules
+moduleTraitCor = cor(MEs, colDat, use = "p")
+modTrait_corr = data.frame(moduleTraitCor)
+# Calculate P value from correlation
+modTrait_P = data.frame(corPvalueStudent(moduleTraitCor, nSamples))
+# List of module gene summary information
+modList = list(datME,moduleColors,modTrait_P,modTrait_corr)
+topDiffNames = rownames(modTrait_P)[order(modTrait_P$Treatment)][1:8]
+
+MEs_target = MEs[,colnames(MEs) %in% topDiffNames]
+
+out = signedKME(expDat.t,
+                 MEs_target,
+                 outputColumnName = "",
+                 corFnc = "cor",
+                 corOptions = "use ='p'")
+
+moduleMemberList = list()
+for( i in 1:length(topDiffNames)){
+        gl <- geneList[paste0("ME",modList[[2]]) == topDiffNames[i]]
+        temp <- data.frame(gene_id = rownames(out),
+                           Mod_Membership = out[,colnames(out) %in% substring(topDiffNames[i],3)])
+        temp$Mod_Membership[!temp$gene_id %in% gl] <- 0
+        temp$Mod_Membership[temp$gene_id %in% gl] <- abs(temp$Mod_Membership[temp$gene_id %in% gl])
+        moduleMemberList[[i]] <- temp
+        write.csv(temp,paste0("C:/Users/katherine.mcfarland/Documents/Bioinformatics/DESeq2 - Lola/WGCNA/WGCNA_ModuleMembership_withPHYS_lolat3_",
+                         substring(topDiffNames[i],3),".csv"),row.names = FALSE)
+}
+names(moduleMemberList) = substring(topDiffNames,3)
+        
+saveRDS(moduleMemberList,"C:/Users/katherine.mcfarland/Documents/Bioinformatics/DESeq2 - Lola/WGCNA/WGCNA_ModuleMembership_withPHYS_lolat3.RData")
+```
+
+## Plots
+
+Load the module eigengene data and merge with the colDat to associate eigengenes with traits.
+
+```{r}
+#Create file with module eigengenes. Once in Excel, I added 'Sample.ID' to the label the first row, then reloaded as a csv. This could also be done in R, but I'm lazy :)
+
+write.csv(datME, "C:/Users/katherine.mcfarland/Documents/Bioinformatics/DESeq2 - Lola/WGCNA/WGCNA_MEs_treat_withPHYS_lolat3.csv", row.names=T, col.names=T)
+```
+
+
+```{r}
+modeig=read.csv("C:/Users/katherine.mcfarland/Documents/Bioinformatics/DESeq2 - Lola/WGCNA/WGCNA_MEs_treat_withPHYS_lolat3.csv",header=T)
+modeig.trait=merge(colDat,modeig,by="Sample.ID")
+head(modeig.trait)
+write.csv(modeig.trait, "C:/Users/katherine.mcfarland/Documents/Bioinformatics/DESeq2 - Lola/WGCNA/EigAnova_treatment_withPHYS_lolat3.csv", row.names=T, col.names=T)
+```
+
+
+
+Now plot the treatment against the blue module eigengenes to see any trends.
+
+```{r}
+library(ggplot2)
+ggplot(modeig.trait,aes(x=as.factor(Treatment),y=MEturquoise)) +
+  geom_boxplot() +
+  ylab("Eigengene") +
+  ggtitle("Module Turquoise")+
+  theme(panel.background=element_blank(),
+        panel.grid.major=element_blank(),
+        panel.grid.minor=element_blank(),
+        panel.border=element_rect(color="black",fill=NA),
+        legend.key=element_blank())
+
+
+```
+
+
+```{r}
+library(ggplot2)
+ggplot(modeig.trait,aes(x=as.factor(Treatment),y=MEgreenyellow)) +
+  geom_boxplot() +
+  ylab("Eigengene") +
+   ggtitle("Module GreenYellow")+
+  theme(panel.background=element_blank(),
+        panel.grid.major=element_blank(),
+        panel.grid.minor=element_blank(),
+        panel.border=element_rect(color="black",fill=NA),
+        legend.key=element_blank())
+
+
+
+```
+
+
+
+Others without sig
+```{r}
+library(ggplot2)
+ggplot(modeig.trait,aes(x=as.factor(Treatment),y=MEdarkgreen)) +
+  geom_boxplot() +
+  ylab("Eigengene") +
+   ggtitle("Module Dark Green")+
+  theme(panel.background=element_blank(),
+        panel.grid.major=element_blank(),
+        panel.grid.minor=element_blank(),
+        panel.border=element_rect(color="black",fill=NA),
+        legend.key=element_blank())
+```
+
+```{r}
+library(ggplot2)
+ggplot(modeig.trait,aes(x=as.factor(Treatment),y=MEdarkorange)) +
+  geom_boxplot() +
+  ylab("Eigengene") +
+   ggtitle("Module Dark Orange")+
+  theme(panel.background=element_blank(),
+        panel.grid.major=element_blank(),
+        panel.grid.minor=element_blank(),
+        panel.border=element_rect(color="black",fill=NA),
+        legend.key=element_blank())
+```
+
+
+```{r}
+library(ggplot2)
+ggplot(modeig.trait,aes(x=as.factor(Day),y=MEsalmon)) +
+  geom_boxplot() +
+  ylab("Eigengene") +
+  theme(panel.background=element_blank(),
+        panel.grid.major=element_blank(),
+        panel.grid.minor=element_blank(),
+        panel.border=element_rect(color="black",fill=NA),
+        legend.key=element_blank())
+```
+
+
+
+# Running ANOVAs on eigengenes
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+library(lme4)
+```
+
+## All Genes
+
+Looking into whether there are differences in eigengene expression between sites depending on the module of interest. There were eight modules identified by WGCNA: black, blue, green, midnight blue, purple, salmon, tan, and turquoise.
+
+
+
+```{r}
+eig.treat=read.csv("C:/Users/katherine.mcfarland/Documents/Bioinformatics/DESeq2 - Lola/WGCNA/EigAnova_treatment_withPHYS_lolat3.csv",header=T)
+head(eig.treat)
+```
+
+```{r}
+
+aov.turquoise=aov(MEturquoise~Treatment, data=eig.treat)
+summary(aov.turquoise)
+
+aov.greenyellow=aov(MEgreenyellow~Treatment, data=eig.treat)
+summary(aov.greenyellow)
+
+
+```
+
+
+
+
+
+
+Load the module eigengene data and merge with the colDat to associate eigengenes with traits.
+
+```{r}
+#Create file with module eigengenes. I opened the first .csv file in Excel and added 'Sample.ID' to label the first column, then reloaded the new csv. This could also be done in R, but I'm too lazy to figure out the code :). Whatever you do, you just need to be sure that the column name for your sample IDs in the colDat and modeig dataframes match in order to merge them.
+
+write.csv(datME, "C:/Users/katherine.mcfarland/Documents/Bioinformatics/DESeq2 - Lola/WGCNA/WCGNA_MEs_treat_lolat3.csv", row.names=T, col.names=T)
+
+
+```
+
+
+
+
+```{r}
+sessionInfo()
+```
