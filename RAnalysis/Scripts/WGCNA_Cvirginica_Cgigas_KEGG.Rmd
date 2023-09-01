@@ -1,0 +1,648 @@
+---
+title: "WGCNA_Cvirginica_KEGG"
+author: "Samuel Gurr"
+date: "2023-08-31"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+# library(reactome.db)
+library(clusterProfiler)
+library(KEGGREST)
+library(tidyr)
+library(stringr)
+library(forcats)
+library(ggplot2)
+library(scales)
+library(ape)
+library(data.table)
+library(tidyverse)
+library(fBasics)
+library(dplyr)
+library(ggplot2)
+# SET WORKING DIRECTORY
+knitr::opts_knit$set(root.dir = "C:/Users/samjg/Documents/Github_repositories/Cvirginica_KM_paper/RAnalysis") # sets the working 
+```
+
+
+# LOAD THE MODULE-MEMBERSHIP MASTER TABLES 
+```{r} 
+
+Day0_ModuleMembership  <- read.csv(file="Output/Day0/Day0.WGCNA_ModulMembership.csv", sep=',', header=TRUE) 
+
+Day1_ModuleMembership  <- read.csv(file="Output/Day1/Day1.WGCNA_ModulMembership.csv", sep=',', header=TRUE) 
+```
+
+# Prepare Cgigas KEGG IDs
+```{r}
+
+# Using KEGGREST..  KEGGREST prep 
+pathways.list <- keggList("pathway", "crg")
+head(pathways.list)
+# Pull all genes for each pathway
+pathway.codes <- sub("path:", "", names(pathways.list)) 
+genes.by.pathway <- sapply(pathway.codes,
+                           function(pwid){
+                             pw <- keggGet(pwid)
+                             if (is.null(pw[[1]]$GENE)) return(NA)
+                             pw2 <- pw[[1]]$GENE[c(TRUE,FALSE)] # may need to modify this to c(FALSE, TRUE) for other organisms
+                             pw2 <- unlist(lapply(strsplit(pw2, split = ";", fixed = T), function(x)x[1]))
+                             return(pw2)
+                           }
+)
+
+# prep for rich factor - we need the number of genes POSSIBLE per pathway
+outdat   <- data.frame() # start dataframe 
+outdat   <- data.frame(matrix(nrow = 1, ncol = 2)) # create dataframe to save cumunalitively during for loop
+colnames(outdat) <- c('KEGGID_pathway', 'Num.genes.per.pathway')
+Genes_per_pathway <- data.frame()
+ for (i in 1:nrow(pVals.by.pathway)) {
+  outdat$KEGGID_pathway        <- rownames(as.data.frame(pVals.by.pathway)[i,])
+  outdat$Num.genes.per.pathway <- nrow(as.data.frame(genes.by.pathway[outdat$KEGGID_pathway[1]]))
+  
+  Genes_per_pathway <- rbind(Genes_per_pathway,outdat) #bind to a cumulative list dataframe
+  #print(Genes_per_pathway) # print to monitor progress 
+ }
+Genes_per_pathway <- Genes_per_pathway %>% # ommit NAs
+  dplyr::mutate(Num.genes.per.pathway = 
+                  case_when(Num.genes.per.pathway == 1 ~ 0, # NAs are registered as N=1, make these 0
+                            TRUE ~ Num.genes.per.pathway)) # all other cases simply print 
+
+nrow(Genes_per_pathway) == 135 # must be TRUE
+
+```
+
+# DAY 0 DATA - FOR LOOP 
+
+## About:
+
+Modules of interest 
+
+Day 0 (at the end of the starvation period)
+
+High expression Fed = turquoise
+
+High expression Starved = blue 
+
+High expression Wild = yellow 
+
+High expression Lola = black 
+
+
+```{r Day 0 all mods of interest KEGG}
+
+Day0_WGCNA_sigmodules <- as.data.frame(c('turquoise', 
+                                         'blue', 
+                                         'yellow', 
+                                         'brown', 
+                                         'black'))
+# prep loop for cumulative output table 
+df_total             <- data.frame() # start dataframe 
+KEGG.Day0           <- data.frame(matrix(nrow = 1, ncol = 10)) # create dataframe to save cumunalitively during for loop
+colnames(KEGG.Day0) <- c('Day', 'modColor', 'KEGGID_pathway', 'pathway.name' , 
+                         'Count.enriched', 'Count.per.pathway',  
+                         'Gene.IDs', 'p.value', 'log10_pvalue', 'Rich_factor') # names for comuns in the for loop
+
+for (i in 1:nrow(Day0_WGCNA_sigmodules)) {
+    modColor         <- Day0_WGCNA_sigmodules[i,1]
+    loopmodColor_cor <- paste("MM.", modColor, sep = '')
+    loopmodColor_p   <- paste("p.MM.", modColor, sep = '')
+    ModuleLoop       <- as.data.frame(Day0_ModuleMembership %>% 
+                                        dplyr::filter(moduleColor %in% modColor)  %>% 
+                                        dplyr::select(c('geneSymbol', 
+                                                        'KEGG_ID', 
+                                                        'moduleColor', 
+                                                        loopmodColor_p, 
+                                                        loopmodColor_cor)) %>% 
+                                                      #dplyr::filter(.[[5]] < 0.05 & .[[6]] > 0.6) %>% # filter based on thresholds set in the WGCNA + DESeq2 overlap w/PCA 
+                                        dplyr::select(c('geneSymbol', 'KEGG_ID',4)) %>% 
+                                        na.omit() %>% 
+                                        dplyr::mutate(KEGG_ID = gsub(".*:","",KEGG_ID)) %>% 
+                                        unnest(KEGG_ID))
+    geneList <- ModuleLoop[,3]
+    names(geneList) <- ModuleLoop$KEGG_ID
+    # Wilcoxon test for each pathway
+    pVals.by.pathway <- t(sapply(names(genes.by.pathway),
+                                 function(pathway) {
+                                   pathway.genes <- genes.by.pathway[[pathway]]
+                                   list.genes.in.pathway <- intersect(names(geneList), pathway.genes)
+                                   list.genes.not.in.pathway <- setdiff(names(geneList), list.genes.in.pathway)
+                                   scores.in.pathway <- geneList[list.genes.in.pathway]
+                                   scores.not.in.pathway <- geneList[list.genes.not.in.pathway]
+                                   if (length(scores.in.pathway) > 0){
+                                     p.value <- wilcox.test(scores.in.pathway, scores.not.in.pathway, alternative = "less")$p.value
+                                   } else{
+                                     p.value <- NA
+                                   }
+                                   return(c(p.value = p.value, Annotated = length(list.genes.in.pathway), GeneIDs = list(list.genes.in.pathway) ))
+                                 }
+    ))
+    # Assemble output table
+    outdat <- data.frame(pathway.code = rownames(pVals.by.pathway)) %>% 
+      dplyr::mutate(Count.enriched    = as.numeric(as.data.frame(pVals.by.pathway)$Annotated), 
+                    Count.per.pathway = (Genes_per_pathway %>%  
+                                               dplyr::filter(KEGGID_pathway == rownames(pVals.by.pathway)))$Num.genes.per.pathway,
+                    Gene.IDs = as.data.frame(pVals.by.pathway)$GeneIDs) %>% 
+      dplyr::rename(KEGGID_pathway = pathway.code) %>% 
+      dplyr::mutate(pathway.name = as.character((pathways.list)[pathway.code]), 
+                    pathway.name = gsub(" -.*","",pathway.name), # remove ' - Crassostrea gigas (Pacific oyster)'
+                    p.value =  pVals.by.pathway[,"p.value"], 
+                    Day = 'Day0', 
+                    modColor = modColor) %>% 
+      dplyr::filter(p.value < 0.05) %>% 
+      na.omit() %>% 
+      dplyr::mutate(log10_pvalue = -log10(as.numeric(p.value)),
+                    Rich_factor = as.numeric(Count.enriched) / as.numeric(Count.per.pathway))
+                    
+    
+    KEGG.Day0 <- rbind(KEGG.Day0,outdat) #bind to a cumulative list dataframe
+    print(KEGG.Day0) # print to monitor progress
+}
+View(KEGG.Day0)
+
+
+# KEGG Rich factor plot 
+D0_KEGG <- KEGG.Day0 %>%  
+              na.omit() %>% # omit 1 row with NAs
+              ggplot(aes(x=reorder(pathway.name, as.numeric(Rich_factor)), y= as.numeric(Rich_factor) )) + 
+                geom_point( aes(col=modColor, size=Count.enriched)) +   # Draw points
+                geom_segment(aes(x=pathway.name, 
+                                 xend=pathway.name, 
+                                 y=min(as.numeric(Rich_factor)), 
+                                 yend=max(as.numeric(Rich_factor))),  
+                             linetype=NA, 
+                             size=0) +   # Draw dashed lines
+                labs(title="Day 0", 
+                     x = "Pathway",
+                     y = "Rich Factor") +
+                coord_flip() +
+                theme_bw() +
+                facet_wrap(~modColor, scales = 'free_y')
+
+pdf(paste("Output/Day0/KEGG/RichFactorPlot.pdf", sep =''), 
+    width=10, 
+    height=9)
+print(D0_KEGG)
+dev.off()
+            
+
+```
+
+# DAY 1 DATA - FOR LOOP 
+
+## About:
+
+Day 1 (after several days of recovery)
+
+High expression Fed = greenyellow  
+
+High expression Starved = green 
+
+High expression Wild =  brown 
+
+High expression Lola = blue 
+
+```{r Day 1 all mods of interest KEGG}
+
+Day1_WGCNA_sigmodules <- as.data.frame(c('greenyellow', 
+                                         'green', 
+                                         'brown', 
+                                         'blue'))
+# prep loop for cumulative output table 
+df_total             <- data.frame() # start dataframe 
+KEGG.Day1            <- data.frame(matrix(nrow = 1, ncol = 10)) # create dataframe to save cumunalitively during for loop
+colnames(KEGG.Day1) <- c('Day', 'modColor', 'KEGGID_pathway', 'pathway.name' , 
+                         'Count.enriched', 'Count.per.pathway',  
+                         'Gene.IDs', 'p.value', 'log10_pvalue', 'Rich_factor') # names for comuns in the for loop
+
+for (i in 1:nrow(Day1_WGCNA_sigmodules)) {
+    modColor         <- Day1_WGCNA_sigmodules[i,1]
+    loopmodColor_cor <- paste("MM.", modColor, sep = '')
+    loopmodColor_p   <- paste("p.MM.", modColor, sep = '')
+    ModuleLoop       <- as.data.frame(Day1_ModuleMembership %>% 
+                                        dplyr::filter(moduleColor %in% modColor)  %>% 
+                                        dplyr::select(c('geneSymbol', 
+                                                        'KEGG_ID', 
+                                                        'geneSymbol', 
+                                                        'moduleColor', 
+                                                        loopmodColor_p, 
+                                                        loopmodColor_cor)) %>% 
+                                                      #dplyr::filter(.[[5]] < 0.05 & .[[6]] > 0.6) %>% # filter based on thresholds set in the WGCNA + DESeq2 overlap w/PCA 
+                                        dplyr::select(c('geneSymbol', 'KEGG_ID',5)) %>% 
+                                        na.omit() %>% 
+                                        dplyr::mutate(KEGG_ID = gsub(".*:","",KEGG_ID)) %>% 
+                                        unnest(KEGG_ID))
+    geneList <- ModuleLoop[,3]
+    names(geneList) <- ModuleLoop$KEGG_ID
+    # Wilcoxon test for each pathway
+    pVals.by.pathway <- t(sapply(names(genes.by.pathway),
+                                 function(pathway) {
+                                   pathway.genes <- genes.by.pathway[[pathway]]
+                                   list.genes.in.pathway <- intersect(names(geneList), pathway.genes)
+                                   list.genes.not.in.pathway <- setdiff(names(geneList), list.genes.in.pathway)
+                                   scores.in.pathway <- geneList[list.genes.in.pathway]
+                                   scores.not.in.pathway <- geneList[list.genes.not.in.pathway]
+                                   if (length(scores.in.pathway) > 0){
+                                     p.value <- wilcox.test(scores.in.pathway, scores.not.in.pathway, alternative = "less")$p.value
+                                   } else{
+                                     p.value <- NA
+                                   }
+                                   return(c(p.value = p.value, Annotated = length(list.genes.in.pathway), GeneIDs = list(list.genes.in.pathway) ))
+                                 }
+    ))
+    # Assemble output table
+    outdat <- data.frame(pathway.code = rownames(pVals.by.pathway)) %>% 
+      dplyr::mutate(Count.enriched    = as.numeric(as.data.frame(pVals.by.pathway)$Annotated), 
+                    Count.per.pathway = (Genes_per_pathway %>%  
+                                               dplyr::filter(KEGGID_pathway == rownames(pVals.by.pathway)))$Num.genes.per.pathway,
+                    Gene.IDs = as.data.frame(pVals.by.pathway)$GeneIDs) %>% 
+      dplyr::rename(KEGGID_pathway = pathway.code) %>% 
+      dplyr::mutate(pathway.name = as.character((pathways.list)[pathway.code]), 
+                    pathway.name = gsub(" -.*","",pathway.name), # remove ' - Crassostrea gigas (Pacific oyster)'
+                    p.value =  pVals.by.pathway[,"p.value"], 
+                    Day = 'Day1', 
+                    modColor = modColor) %>% 
+      dplyr::filter(p.value < 0.05) %>% 
+      na.omit() %>% 
+      dplyr::mutate(log10_pvalue = -log10(as.numeric(p.value)),
+                    Rich_factor = as.numeric(Count.enriched) / as.numeric(Count.per.pathway))
+    
+    KEGG.Day1 <- rbind(KEGG.Day1,outdat) #bind to a cumulative list dataframe
+    print(KEGG.Day1) # print to monitor progress
+}
+View(KEGG.Day1)
+
+D1_KEGG<- KEGG.Day1 %>%  
+              na.omit() %>% # omit 1 row with NAs
+              ggplot(aes(x=reorder(pathway.name, as.numeric(Rich_factor)), y= as.numeric(Rich_factor) )) + 
+                geom_point( aes(col=modColor, size=Count.enriched)) +   # Draw points
+                geom_segment(aes(x=pathway.name, 
+                                 xend=pathway.name, 
+                                 y=min(as.numeric(Rich_factor)), 
+                                 yend=max(as.numeric(Rich_factor))),  
+                             linetype=NA, 
+                             size=0) +   # Draw dashed lines
+                labs(title="Day 1", 
+                     x = "Pathway",
+                     y = "Rich Factor") +
+                coord_flip() +
+                theme_bw() +
+                facet_wrap(~modColor, scales = 'free_y')
+
+
+pdf(paste("Output/Day1/KEGG/RichFactorPlot.pdf", sep =''), 
+    width=10, 
+    height=9)
+print(D1_KEGG)
+dev.off()
+            
+
+
+```
+
+High expression Fed = greenyellow  **compare to Turquoise day 0**
+
+```{r Overlapped responses - High expression when fed}
+
+# High expression when Fed
+
+# merge genes in greenyellow that overlap with turquoise day 0
+Day1_greenyellow <- Day1_ModuleMembership %>% dplyr::filter(moduleColor %in% 'greenyellow')
+Day0_turquoise   <- Day0_ModuleMembership %>% dplyr::filter(moduleColor %in% 'turquoise')
+HighExp_Fed      <- Day1_greenyellow %>% na.omit() %>% filter(geneSymbol %in% Day0_turquoise$geneSymbol)
+nrow(HighExp_Fed)
+HighExp_Fed_formatted  <- as.data.frame(HighExp_Fed %>% 
+                                  dplyr::select(c('geneSymbol', 
+                                                  'KEGG_ID', 
+                                                  'moduleColor', 
+                                                   p.MM.greenyellow, 
+                                                   p.MM.greenyellow)) %>% 
+                                        dplyr::select(c('geneSymbol', 'KEGG_ID',4)) %>% 
+                                        na.omit() %>% 
+                                        dplyr::mutate(KEGG_ID = gsub(".*:","",KEGG_ID)) %>% 
+                                        unnest(KEGG_ID))
+
+geneList        <- HighExp_Fed_formatted[,3]
+names(geneList) <- HighExp_Fed_formatted$KEGG_ID
+# Wilcoxon test for each pathway
+pVals.by.pathway <- t(sapply(names(genes.by.pathway), 
+                                 function(pathway) {
+                                   pathway.genes <- genes.by.pathway[[pathway]]
+                                   list.genes.in.pathway <- intersect(names(geneList), pathway.genes)
+                                   list.genes.not.in.pathway <- setdiff(names(geneList), list.genes.in.pathway)
+                                   scores.in.pathway <- geneList[list.genes.in.pathway]
+                                   scores.not.in.pathway <- geneList[list.genes.not.in.pathway]
+                                   if (length(scores.in.pathway) > 0){
+                                     p.value <- wilcox.test(scores.in.pathway, 
+                                                            scores.not.in.pathway, 
+                                                            alternative = "less")$p.value
+                                   } else{
+                                     p.value <- NA
+                                   }
+                                   return(c(p.value = p.value, 
+                                            Annotated = length(list.genes.in.pathway), 
+                                            GeneIDs = list(list.genes.in.pathway) ))
+                                 }))
+# Assemble output table
+HighExp_Fed_KEGG <- data.frame(pathway.code = rownames(pVals.by.pathway)) %>% 
+      dplyr::mutate(Count.enriched    = as.numeric(as.data.frame(pVals.by.pathway)$Annotated), 
+                    Count.per.pathway = (Genes_per_pathway %>%  
+                                               dplyr::filter(KEGGID_pathway == rownames(pVals.by.pathway)))$Num.genes.per.pathway,
+                    Gene.IDs = as.data.frame(pVals.by.pathway)$GeneIDs) %>% 
+      dplyr::rename(KEGGID_pathway = pathway.code) %>% 
+      dplyr::mutate(pathway.name = as.character((pathways.list)[pathway.code]), 
+                    pathway.name = gsub(" -.*","",pathway.name), # remove ' - Crassostrea gigas (Pacific oyster)'
+                    p.value =  pVals.by.pathway[,"p.value"], 
+                    Day = 'Day1', 
+                    modColor = modColor) %>% 
+      dplyr::filter(p.value < 0.05) %>% 
+      na.omit() %>% 
+      dplyr::mutate(log10_pvalue = -log10(as.numeric(p.value)),
+                    Rich_factor = as.numeric(Count.enriched) / as.numeric(Count.per.pathway))
+HighExp_Fed_KEGG
+
+Fed_KEGG<- HighExp_Fed_KEGG %>%  
+              na.omit() %>% # omit 1 row with NAs
+              ggplot(aes(x=reorder(pathway.name, as.numeric(Rich_factor)), y= as.numeric(Rich_factor) )) + 
+                geom_point( aes(col="day 0 turquoise  & day 1 greenyellow", size=Count.enriched)) +   # Draw points
+                geom_segment(aes(x=pathway.name, 
+                                 xend=pathway.name, 
+                                 y=min(as.numeric(Rich_factor)), 
+                                 yend=max(as.numeric(Rich_factor))),  
+                             linetype=NA, 
+                             size=0) +   # Draw dashed lines
+                labs(title=paste0("Fed = High Expression ",nrow(HighExp_Fed), " genes"), 
+                     x = "Pathway",
+                     y = "Rich Factor") +
+                coord_flip() +
+                theme_bw() 
+
+
+pdf(paste("Output/KEGG_RichFactor_Fed.pdf", sep =''), 
+    width=10, 
+    height=9)
+print(Fed_KEGG)
+dev.off()
+
+```
+High expression Starved = Day 1 green  **compare to Day 0 blue**
+
+```{r Overlapped responses - High expression when STARVED}
+
+# High expression when Fed
+
+# merge genes in greenyellow that overlap with turquoise day 0
+Day1_green      <- Day1_ModuleMembership %>% dplyr::filter(moduleColor %in% 'green')
+Day0_blue       <- Day0_ModuleMembership %>% dplyr::filter(moduleColor %in% 'blue')
+HighExp_Starved <- Day1_green %>% na.omit() %>% filter(geneSymbol %in% Day0_blue$geneSymbol)
+nrow(HighExp_Starved)
+HighExp_Starved_formatted  <- as.data.frame(HighExp_Starved %>% 
+                                  dplyr::select(c('geneSymbol', 
+                                                  'KEGG_ID', 
+                                                  'moduleColor', 
+                                                   p.MM.green, 
+                                                   p.MM.green)) %>% 
+                                        dplyr::select(c('geneSymbol', 'KEGG_ID',4)) %>% 
+                                        na.omit() %>% 
+                                        dplyr::mutate(KEGG_ID = gsub(".*:","",KEGG_ID)) %>% 
+                                        unnest(KEGG_ID))
+
+geneList        <- HighExp_Starved_formatted[,3]
+names(geneList) <- HighExp_Starved_formatted$KEGG_ID
+# Wilcoxon test for each pathway
+pVals.by.pathway <- t(sapply(names(genes.by.pathway), 
+                                 function(pathway) {
+                                   pathway.genes <- genes.by.pathway[[pathway]]
+                                   list.genes.in.pathway <- intersect(names(geneList), pathway.genes)
+                                   list.genes.not.in.pathway <- setdiff(names(geneList), list.genes.in.pathway)
+                                   scores.in.pathway <- geneList[list.genes.in.pathway]
+                                   scores.not.in.pathway <- geneList[list.genes.not.in.pathway]
+                                   if (length(scores.in.pathway) > 0){
+                                     p.value <- wilcox.test(scores.in.pathway, 
+                                                            scores.not.in.pathway, 
+                                                            alternative = "less")$p.value
+                                   } else{
+                                     p.value <- NA
+                                   }
+                                   return(c(p.value = p.value, 
+                                            Annotated = length(list.genes.in.pathway), 
+                                            GeneIDs = list(list.genes.in.pathway) ))
+                                 }))
+# Assemble output table
+HighExp_Starved_KEGG <- data.frame(pathway.code = rownames(pVals.by.pathway)) %>% 
+      dplyr::mutate(Count.enriched    = as.numeric(as.data.frame(pVals.by.pathway)$Annotated), 
+                    Count.per.pathway = (Genes_per_pathway %>%  
+                                               dplyr::filter(KEGGID_pathway == rownames(pVals.by.pathway)))$Num.genes.per.pathway,
+                    Gene.IDs = as.data.frame(pVals.by.pathway)$GeneIDs) %>% 
+      dplyr::rename(KEGGID_pathway = pathway.code) %>% 
+      dplyr::mutate(pathway.name = as.character((pathways.list)[pathway.code]), 
+                    pathway.name = gsub(" -.*","",pathway.name), # remove ' - Crassostrea gigas (Pacific oyster)'
+                    p.value =  pVals.by.pathway[,"p.value"], 
+                    Day = 'Day1', 
+                    modColor = modColor) %>% 
+      dplyr::filter(p.value < 0.05) %>% 
+      na.omit() %>% 
+      dplyr::mutate(log10_pvalue = -log10(as.numeric(p.value)),
+                    Rich_factor = as.numeric(Count.enriched) / as.numeric(Count.per.pathway))
+HighExp_Starved_KEGG
+
+Starved_KEGG<- HighExp_Starved_KEGG %>%  
+              na.omit() %>% # omit 1 row with NAs
+              ggplot(aes(x=reorder(pathway.name, as.numeric(Rich_factor)), y= as.numeric(Rich_factor) )) + 
+                geom_point( aes(col="day 0 blue  & day 1 green", size=Count.enriched)) +   # Draw points
+                geom_segment(aes(x=pathway.name, 
+                                 xend=pathway.name, 
+                                 y=min(as.numeric(Rich_factor)), 
+                                 yend=max(as.numeric(Rich_factor))),  
+                             linetype=NA, 
+                             size=0) +   # Draw dashed lines
+                labs(title=paste0("Starved = High Expression ",nrow(HighExp_Starved), " genes"), 
+                     x = "Pathway",
+                     y = "Rich Factor") +
+                coord_flip() +
+                theme_bw() 
+
+
+pdf(paste("Output/KEGG_RichFactor_Starved.pdf", sep =''), 
+    width=10, 
+    height=9)
+print(Starved_KEGG)
+dev.off()
+
+```
+
+
+High expression Wild =  day 1 brown **comapre to day 0 yellow**
+
+```{r Overlapped responses - High expression for WILD population}
+
+# High expression when Fed
+
+# merge genes in greenyellow that overlap with turquoise day 0
+Day1_brown     <- Day1_ModuleMembership %>% dplyr::filter(moduleColor %in% 'brown')
+Day0_yellow    <- Day0_ModuleMembership %>% dplyr::filter(moduleColor %in% 'yellow')
+HighExp_Wild   <- Day1_brown %>% na.omit() %>% filter(geneSymbol %in% Day0_yellow$geneSymbol)
+nrow(HighExp_Wild)
+HighExp_Wild_formatted  <- as.data.frame(HighExp_Wild %>% 
+                                  dplyr::select(c('geneSymbol', 
+                                                  'KEGG_ID', 
+                                                  'moduleColor', 
+                                                   p.MM.brown, 
+                                                   p.MM.brown)) %>% 
+                                        dplyr::select(c('geneSymbol', 'KEGG_ID',4)) %>% 
+                                        na.omit() %>% 
+                                        dplyr::mutate(KEGG_ID = gsub(".*:","",KEGG_ID)) %>% 
+                                        unnest(KEGG_ID))
+
+geneList        <- HighExp_Wild_formatted[,3]
+names(geneList) <- HighExp_Wild_formatted$KEGG_ID
+# Wilcoxon test for each pathway
+pVals.by.pathway <- t(sapply(names(genes.by.pathway), 
+                                 function(pathway) {
+                                   pathway.genes <- genes.by.pathway[[pathway]]
+                                   list.genes.in.pathway <- intersect(names(geneList), pathway.genes)
+                                   list.genes.not.in.pathway <- setdiff(names(geneList), list.genes.in.pathway)
+                                   scores.in.pathway <- geneList[list.genes.in.pathway]
+                                   scores.not.in.pathway <- geneList[list.genes.not.in.pathway]
+                                   if (length(scores.in.pathway) > 0){
+                                     p.value <- wilcox.test(scores.in.pathway, 
+                                                            scores.not.in.pathway, 
+                                                            alternative = "less")$p.value
+                                   } else{
+                                     p.value <- NA
+                                   }
+                                   return(c(p.value = p.value, 
+                                            Annotated = length(list.genes.in.pathway), 
+                                            GeneIDs = list(list.genes.in.pathway) ))
+                                 }))
+# Assemble output table
+HighExp_Wild_KEGG <- data.frame(pathway.code = rownames(pVals.by.pathway)) %>% 
+      dplyr::mutate(Count.enriched    = as.numeric(as.data.frame(pVals.by.pathway)$Annotated), 
+                    Count.per.pathway = (Genes_per_pathway %>%  
+                                               dplyr::filter(KEGGID_pathway == rownames(pVals.by.pathway)))$Num.genes.per.pathway,
+                    Gene.IDs = as.data.frame(pVals.by.pathway)$GeneIDs) %>% 
+      dplyr::rename(KEGGID_pathway = pathway.code) %>% 
+      dplyr::mutate(pathway.name = as.character((pathways.list)[pathway.code]), 
+                    pathway.name = gsub(" -.*","",pathway.name), # remove ' - Crassostrea gigas (Pacific oyster)'
+                    p.value =  pVals.by.pathway[,"p.value"], 
+                    Day = 'Day1', 
+                    modColor = modColor) %>% 
+      dplyr::filter(p.value < 0.05) %>% 
+      na.omit() %>% 
+      dplyr::mutate(log10_pvalue = -log10(as.numeric(p.value)),
+                    Rich_factor = as.numeric(Count.enriched) / as.numeric(Count.per.pathway))
+HighExp_Wild_KEGG
+
+Wild_KEGG<- HighExp_Wild_KEGG %>%  
+              na.omit() %>% # omit 1 row with NAs
+              ggplot(aes(x=reorder(pathway.name, as.numeric(Rich_factor)), y= as.numeric(Rich_factor) )) + 
+                geom_point( aes(col="day 0 yellow  & day 1 brown", size=Count.enriched)) +   # Draw points
+                geom_segment(aes(x=pathway.name, 
+                                 xend=pathway.name, 
+                                 y=min(as.numeric(Rich_factor)), 
+                                 yend=max(as.numeric(Rich_factor))),  
+                             linetype=NA, 
+                             size=0) +   # Draw dashed lines
+                labs(title=paste0("Wild = High Expression ",nrow(HighExp_Wild), " genes"), 
+                     x = "Pathway",
+                     y = "Rich Factor") +
+                coord_flip() +
+                theme_bw() 
+
+
+pdf(paste("Output/KEGG_RichFactor_Wild.pdf", sep =''), 
+    width=10, 
+    height=9)
+print(Wild_KEGG)
+dev.off()
+
+```
+
+High expression Lola = day 1 blue - **compare to day 0 black**
+
+```{r Overlapped responses - High expression for Lola population}
+
+# High expression when Fed
+
+# merge genes in greenyellow that overlap with turquoise day 0
+Day1_blue      <- Day1_ModuleMembership %>% dplyr::filter(moduleColor %in% 'blue')
+Day0_black     <- Day0_ModuleMembership %>% dplyr::filter(moduleColor %in% 'black')
+HighExp_Lola   <- Day1_blue %>% na.omit() %>% filter(geneSymbol %in% Day0_black$geneSymbol)
+nrow(HighExp_Lola)
+HighExp_Lola_formatted  <- as.data.frame(HighExp_Lola %>% 
+                                  dplyr::select(c('geneSymbol', 
+                                                  'KEGG_ID', 
+                                                  'moduleColor', 
+                                                   p.MM.blue, 
+                                                   p.MM.blue)) %>% 
+                                        dplyr::select(c('geneSymbol', 'KEGG_ID',4)) %>% 
+                                        na.omit() %>% 
+                                        dplyr::mutate(KEGG_ID = gsub(".*:","",KEGG_ID)) %>% 
+                                        unnest(KEGG_ID))
+
+geneList        <- HighExp_Lola_formatted[,3]
+names(geneList) <- HighExp_Lola_formatted$KEGG_ID
+# Wilcoxon test for each pathway
+pVals.by.pathway <- t(sapply(names(genes.by.pathway), 
+                                 function(pathway) {
+                                   pathway.genes <- genes.by.pathway[[pathway]]
+                                   list.genes.in.pathway <- intersect(names(geneList), pathway.genes)
+                                   list.genes.not.in.pathway <- setdiff(names(geneList), list.genes.in.pathway)
+                                   scores.in.pathway <- geneList[list.genes.in.pathway]
+                                   scores.not.in.pathway <- geneList[list.genes.not.in.pathway]
+                                   if (length(scores.in.pathway) > 0){
+                                     p.value <- wilcox.test(scores.in.pathway, 
+                                                            scores.not.in.pathway, 
+                                                            alternative = "less")$p.value
+                                   } else{
+                                     p.value <- NA
+                                   }
+                                   return(c(p.value = p.value, 
+                                            Annotated = length(list.genes.in.pathway), 
+                                            GeneIDs = list(list.genes.in.pathway) ))
+                                 }))
+# Assemble output table
+HighExp_Lola_KEGG <- data.frame(pathway.code = rownames(pVals.by.pathway)) %>% 
+      dplyr::mutate(Count.enriched    = as.numeric(as.data.frame(pVals.by.pathway)$Annotated), 
+                    Count.per.pathway = (Genes_per_pathway %>%  
+                                               dplyr::filter(KEGGID_pathway == rownames(pVals.by.pathway)))$Num.genes.per.pathway,
+                    Gene.IDs = as.data.frame(pVals.by.pathway)$GeneIDs) %>% 
+      dplyr::rename(KEGGID_pathway = pathway.code) %>% 
+      dplyr::mutate(pathway.name = as.character((pathways.list)[pathway.code]), 
+                    pathway.name = gsub(" -.*","",pathway.name), # remove ' - Crassostrea gigas (Pacific oyster)'
+                    p.value =  pVals.by.pathway[,"p.value"], 
+                    Day = 'Day1', 
+                    modColor = modColor) %>% 
+      dplyr::filter(p.value < 0.05) %>% 
+      na.omit() %>% 
+      dplyr::mutate(log10_pvalue = -log10(as.numeric(p.value)),
+                    Rich_factor = as.numeric(Count.enriched) / as.numeric(Count.per.pathway))
+HighExp_Lola_KEGG
+
+Lola_KEGG<- HighExp_Lola_KEGG %>%  
+              na.omit() %>% # omit 1 row with NAs
+              ggplot(aes(x=reorder(pathway.name, as.numeric(Rich_factor)), y= as.numeric(Rich_factor) )) + 
+                geom_point( aes(col="day 0 black  & day 1 blue", size=Count.enriched)) +   # Draw points
+                geom_segment(aes(x=pathway.name, 
+                                 xend=pathway.name, 
+                                 y=min(as.numeric(Rich_factor)), 
+                                 yend=max(as.numeric(Rich_factor))),  
+                             linetype=NA, 
+                             size=0) +   # Draw dashed lines
+                labs(title=paste0("Lola = High Expression ",nrow(HighExp_Lola), " genes"), 
+                     x = "Pathway",
+                     y = "Rich Factor") +
+                coord_flip() +
+                theme_bw() 
+
+
+pdf(paste("Output/KEGG_RichFactor_Lola.pdf", sep =''), 
+    width=10, 
+    height=9)
+print(Lola_KEGG)
+dev.off()
+
+```
+
+
+

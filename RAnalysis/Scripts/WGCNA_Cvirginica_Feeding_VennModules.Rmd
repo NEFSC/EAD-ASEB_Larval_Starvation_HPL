@@ -1,0 +1,164 @@
+---
+title: "WGCNA_Cvriginica_Feeding_VennModules"
+author: "Samuel Gurr"
+date: "2023-08-31"
+output: html_document
+---
+
+# SETUP
+```{r setup, include= FALSE}
+# LOAD PACKAGES
+library(dplyr)
+library(ggplot2)
+library(dplyr)
+library(VennDiagram)
+library(ggVennDiagram)
+library(ggvenn)
+library(gridExtra)
+# SET WORKING DIRECTORY
+
+knitr::opts_knit$set(root.dir = "C:/Users/samjg/Documents/Github_repositories/Cvirginica_KM_paper/RAnalysis") # sets the working 
+
+```
+
+
+# LOAD THE MODULE-MEMBERSHIP MASTER TABLES 
+```{r} 
+
+Day0_ModuleMembership  <- read.csv(file="Output/Day0/Day0.WGCNA_ModulMembership.csv", sep=',', header=TRUE) 
+
+Day1_ModuleMembership  <- read.csv(file="Output/Day1/Day1.WGCNA_ModulMembership.csv", sep=',', header=TRUE) 
+```
+
+## About:
+
+Modules of interest 
+
+Day 0 (at the end of the starvation period)
+
+High expression Fed = turquoise
+
+High expression Starved = blue 
+
+High expression Wild = yellow 
+
+High expression Lola = black 
+
+
+Day 1 (after several days of recovery)
+
+High expression Fed = greenyellow  **compare to Turquoise day 0**
+
+High expression Starved = green  **compare to Blue day 0**
+
+High expression Wild =  brown **comapre to Yellow day 0**
+
+High expression Lola = blue - **compare to Black day 0**
+
+# VENN DIAGRAMS - DATA PREP
+```{r} 
+Day0_Starved <- Day0_ModuleMembership %>% dplyr::filter(moduleColor %in% 'turquoise') %>% dplyr::select('geneSymbol') %>% na.omit()
+Day0_Fed     <- Day0_ModuleMembership %>% dplyr::filter(moduleColor %in% 'blue') %>% dplyr::select('geneSymbol') %>% na.omit()
+Day0_Wild    <- Day0_ModuleMembership %>% dplyr::filter(moduleColor %in% 'yellow') %>% dplyr::select('geneSymbol') %>% na.omit()
+Day0_Lola    <- Day0_ModuleMembership %>% dplyr::filter(moduleColor %in% 'black') %>% dplyr::select('geneSymbol') %>% na.omit()
+
+
+Day1_Starved <- Day1_ModuleMembership %>% dplyr::filter(moduleColor %in% 'green') %>% dplyr::select('geneSymbol') %>% na.omit()
+Day1_Fed     <- Day1_ModuleMembership %>% dplyr::filter(moduleColor %in% 'greenyellow') %>% dplyr::select('geneSymbol') %>% na.omit()
+Day1_Wild    <- Day1_ModuleMembership %>% dplyr::filter(moduleColor %in% 'brown') %>% dplyr::select('geneSymbol') %>% na.omit()
+Day1_Lola    <- Day1_ModuleMembership %>% dplyr::filter(moduleColor %in% 'blue') %>% dplyr::select('geneSymbol') %>% na.omit()
+
+```
+
+
+# VENN DIAGRAMS - FEEDING TREATMENT
+```{r}
+Feeding_treatment_all <- list(
+  Fed_d0      = Day0_Fed$geneSymbol, 
+  Fed_d1      = Day1_Fed$geneSymbol, 
+  Starved_d0  = Day0_Starved$geneSymbol,
+  Starved_d1  = Day1_Starved$geneSymbol
+)
+FeedTreat_Venn_All <- ggvenn(Feeding_treatment_all, 
+                   fill_color = c("#999999", "#E69F00", "#56B4E9", "#009E73"),
+                   stroke_size = 0.5, set_name_size = 4)
+# starved
+Starved <- list(
+  Starved_d0  = Day0_Starved$geneSymbol,
+  Starved_d1  = Day1_Starved$geneSymbol
+)
+FeedTreat_Venn_Starved <- ggvenn(Starved, 
+                   fill_color = c("#999999", "#009E73"),
+                   stroke_size = 0.5, set_name_size = 4)
+# fed
+Fed <- list(
+  Fed_d0      = Day0_Fed$geneSymbol, 
+  Fed_d1      = Day1_Fed$geneSymbol
+)
+FeedTreat_Venn_Fed <- ggvenn(Fed, 
+                   fill_color = c("#E69F00", "#56B4E9"),
+                   stroke_size = 0.5, set_name_size = 4)
+
+# merge fed and starved
+FedStarved_Venns <- ggarrange(FeedTreat_Venn_Fed,
+                              FeedTreat_Venn_Starved, nrow = 1)
+# full figure 
+Venn_all <- grid.arrange(FeedTreat_Venn_All, 
+                         FedStarved_Venns,  nrow=2, clip="off")
+
+#print
+pdf(paste("Output/WGCNAMods_VennFeeding.pdf", sep =''), 
+    width=7, 
+    height=7)
+print(FeedTreat_Venn_All)
+dev.off()
+          
+
+```
+
+
+
+# VENN DIAGRAMS - Line
+```{r}
+Line_all <- list(
+  Wild_d0      = Day0_Wild$geneSymbol, 
+  Wild_d1      = Day1_Wild$geneSymbol, 
+  Lola_d0      = Day0_Lola$geneSymbol,
+  Lola_d1      = Day1_Lola$geneSymbol
+)
+Line_Venn_All <- ggvenn(Line_all, 
+                   fill_color = c("#999999", "#E69F00", "#56B4E9", "#009E73"),
+                   stroke_size = 0.5, set_name_size = 4)
+# Wild
+Wild <- list(
+  Wild_d0  = Day0_Wild$geneSymbol,
+  Wild_d1  = Day1_Wild$geneSymbol
+)
+Line_Venn_Wild <- ggvenn(Wild, 
+                   fill_color = c("#999999", "#009E73"),
+                   stroke_size = 0.5, set_name_size = 4)
+# Lola
+Lola <- list(
+  Lola_d0      = Day0_Lola$geneSymbol, 
+  Lola_d1      = Day1_Lola$geneSymbol
+)
+Line_Venn_Lola <- ggvenn(Lola, 
+                   fill_color = c("#E69F00", "#56B4E9"),
+                   stroke_size = 0.5, set_name_size = 4)
+
+# merge 
+Line_Venns <- ggarrange(Line_Venn_Wild, 
+                        Line_Venn_Lola, nrow = 1)
+# full figure 
+Line_Venn_all <- grid.arrange(Line_Venn_All, 
+                              Line_Venns,  nrow=2, clip="off")
+
+# print
+pdf(paste("Output/WGCNAMods_VennLine.pdf", sep =''), 
+    width=7, 
+    height=7)
+print(Line_Venn_All)
+dev.off()
+```
+
+
