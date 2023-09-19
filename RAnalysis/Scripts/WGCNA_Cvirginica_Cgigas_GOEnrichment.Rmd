@@ -1,0 +1,382 @@
+---
+title: "WGCNA_Cvirginica_KEGG"
+author: "Samuel Gurr"
+date: "2023-08-31"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+# load libraries - notes show the install command needed to install (pre installed)
+library(goseq)
+library(dplyr)
+library(forcats)
+library(ggplot2)
+library(gridExtra)
+library(tidyr)
+library(grDevices)
+library(reshape2)
+library(Rmisc)
+library(ggpubr)
+library(tibble)
+library(hrbrthemes)
+library(gridExtra)
+library(tidyr)
+library(zoo)
+library(ComplexHeatmap)
+library(circlize)
+library(GSEABase)
+library(data.table)
+library(stringr)
+# SET WORKING DIRECTORY
+knitr::opts_knit$set(root.dir = "C:/Users/samjg/Documents/Github_repositories/Cvirginica_KM_paper/RAnalysis") # sets the working 
+```
+
+
+# LOAD THE MODULE-MEMBERSHIP MASTER TABLES 
+```{r} 
+
+Day0_ModuleMembership  <- read.csv(file="Output/Day0/Day0.WGCNA_ModulMembership.csv", sep=',', header=TRUE) 
+
+Day1_ModuleMembership  <- read.csv(file="Output/Day1/Day1.WGCNA_ModulMembership.csv", sep=',', header=TRUE) 
+
+```
+
+# Load GO infromation
+```{r}
+# Annotation file - acheived with diamond against the Cvirginica genome - Airradians genome is unannotated!
+GOEnrichment_reference <- read.csv(file="Data/Seq_Reference_Master.csv", sep=',', header=TRUE) 
+
+# GOslim
+slim <- getOBOCollection("http://current.geneontology.org/ontology/subsets/goslim_generic.obo") #get GO database - # call goslim_generic.obo terms as 'slim'
+```
+
+goseq
+Prepare dataframe(s) and vectors for goseq 
+Format 'GO.term', 'GO_gene.length', and 'GO_unique.genes.all' for goseq
+```{r GO.terms_data}
+
+
+# GO.term
+Cvrig_GOterms                <- as.data.frame(GOEnrichment_reference) %>% dplyr::select(c('Cvirginica_GeneID','Annotation_GO_ID'))
+colnames(Cvrig_GOterms)[1:2] <- c('transcript.ID', 'GO.terms') # call gene name and the GO terms - (Uniprot ID 'V5')
+splitted                        <- strsplit(as.character(Cvrig_GOterms$GO.terms), ";") #slit into multiple GO ids by delimiter'; ' remember the space after ; is needed here! without this you will only call the first listed GO term for each gene!
+
+
+GO.terms                        <- data.frame(v1 = rep.int(Cvrig_GOterms$transcript.ID, sapply(splitted, length)), 
+                                              v2 = unlist(splitted)) #list all genes with each of their GO terms in a single row
+
+# Gene length 
+GO_gene.length           <- unique(GOEnrichment_reference %>% dplyr::select(c("Cvirginica_GeneID","Cvirginica_length")))
+names(GO_gene.length)[1] <- "gene.ID" # cange the column name to merge with the gene counts on each day to call ID and length vectors UNIQUE to the experiment day
+length_vector            <- GO_gene.length$Cvirginica_length
+
+# Unique genes
+GO_unique.genes.all <- as.vector(unique(GOEnrichment_reference$Cvirginica_GeneID)) # call all unique genes for GO analysis (goseq)
+
+
+```
+
+# DAY 0 DATA - FOR LOOP 
+
+## About:
+
+Modules of interest 
+
+Day 0 (at the end of the starvation period)
+
+High expression Fed = turquoise
+
+High expression Starved = blue 
+
+High expression Wild = yellow 
+
+High expression Lola = black 
+
+```{r Day 0 all mods of interest KEGG}
+
+Day0_WGCNA_sigmodules <- as.data.frame(c('turquoise', 
+                                         'blue', 
+                                         'yellow', 
+                                         'brown', 
+                                         'black'))
+# prep loop for cumulative output table 
+df_total             <- data.frame() # start dataframe 
+GO.Day0              <- data.frame(matrix(nrow = 1, ncol = 9)) # create dataframe to save cumunalitively during for loop
+colnames(GO.Day0)    <- c('Day', 'modColor', 'ontology', 'term', 
+                          'category', 'over_represented_pvalue' , 
+                         'under_represented_pvalue', 'numDEInCat','numInCat') # names for comuns in the for loop
+
+for (i in 1:nrow(Day0_WGCNA_sigmodules)) {
+    modColor         <- Day0_WGCNA_sigmodules[i,1]
+    loopmodColor_cor <- paste("MM.", modColor, sep = '')
+    loopmodColor_p   <- paste("p.MM.", modColor, sep = '')
+    ModuleLoop       <- as.data.frame(Day0_ModuleMembership %>% 
+                                        dplyr::filter(moduleColor %in% modColor)  %>% 
+                                        dplyr::select(c('geneSymbol', 
+                                                        'GO.terms', 
+                                                        'geneSymbol', 
+                                                        'moduleColor', 
+                                                        loopmodColor_p, 
+                                                        loopmodColor_cor)))
+    #  merge to the genes list 'GO_unique.genes.all' to create a binary vector 0 = not in module; 1 = in module
+    ModLoop_boolean  <- as.integer(GO_unique.genes.all%in%(ModuleLoop$geneSymbol)) # Day 0 - Primary - Upregulated DEGs
+    names(ModLoop_boolean)=GO_unique.genes.all
+    # Calculate Probability Weighting Function
+    pwf              <- nullp(ModLoop_boolean,  id=GO_unique.genes.all, bias.data=length_vector) # weight vector by length of gene
+    # Run oseq
+    Run_goseq        <- goseq(pwf, GO_unique.genes.all, gene2cat=GO.terms, test.cats=c("GO:CC", "GO:BP", "GO:MF"), method="Wallenius", use_genes_without_cat=TRUE)
+    # 
+    Enrich.05                   <- Run_goseq$category[Run_goseq$over_represented_pvalue<.05]
+    Enrich.05_DF                <- data.frame(Enrich.05)
+    colnames(Enrich.05_DF)      <- c("category")
+    
+    Enrich.05_DF_merge          <- merge(Enrich.05_DF, Run_goseq, by="category")
+    Enrich.05_DF_merge          <- Enrich.05_DF_merge[order(Enrich.05_DF_merge$ontology, Enrich.05_DF_merge$over_represented_pvalue, -Enrich.05_DF_merge$numDEInCat),]
+    Enrich.05_DF_merge$term     <- as.factor(Enrich.05_DF_merge$term)
+    Enrich.05_DF_merge$modColor <- modColor
+    Enrich.05_DF_merge$Day      <- "Day1"
+    
+    Enrich.05_DF_merge_filtered <- Enrich.05_DF_merge %>% filter(!(numDEInCat<2 & ontology == "BP"), !(numDEInCat<2 & ontology == "MF"))
+    
+    GO.Day0 <- rbind(GO.Day0,Enrich.05_DF_merge_filtered) #bind to a cumulative list dataframe
+    # print(GO.Day0) # print to monitor progress
+
+}
+GO.Day0_FINAL <- GO.Day0 %>% 
+                  na.omit() %>% 
+                  dplyr::filter(ontology %in% c("MF", "BP"))
+
+# write csv
+write.csv(GO.Day0_FINAL, "C:/Users/samjg/Documents/Github_repositories/Cvirginica_KM_paper/RAnalysis/Output/Day0/Day0_GOEntrichment.csv")
+```
+
+
+# DAY 1 DATA - FOR LOOP 
+
+## About:
+
+Day 1 (after several days of recovery)
+
+High expression Fed = greenyellow  
+
+High expression Starved = green 
+
+High expression Wild =  brown 
+
+High expression Lola = blue 
+
+```{r Day 1 all mods of interest KEGG}
+
+Day1_WGCNA_sigmodules <- as.data.frame(c('greenyellow', 
+                                         'green', 
+                                         'brown', 
+                                         'blue'))
+# prep loop for cumulative output table 
+df_total             <- data.frame() # start dataframe 
+GO.Day1              <- data.frame(matrix(nrow = 1, ncol = 9)) # create dataframe to save cumunalitively during for loop
+colnames(GO.Day1)    <- c('Day', 'modColor', 'ontology', 'term', 
+                          'category', 'over_represented_pvalue' , 
+                         'under_represented_pvalue', 'numDEInCat','numInCat') # names for comuns in the for loop
+
+for (i in 1:nrow(Day1_WGCNA_sigmodules)) {
+    modColor         <- Day1_WGCNA_sigmodules[i,1]
+    loopmodColor_cor <- paste("MM.", modColor, sep = '')
+    loopmodColor_p   <- paste("p.MM.", modColor, sep = '')
+    ModuleLoop       <- as.data.frame(Day1_ModuleMembership %>% 
+                                        dplyr::filter(moduleColor %in% modColor)  %>% 
+                                        dplyr::select(c('geneSymbol', 
+                                                        'GO.terms', 
+                                                        'geneSymbol', 
+                                                        'moduleColor', 
+                                                        loopmodColor_p, 
+                                                        loopmodColor_cor)))
+    #  merge to the genes list 'GO_unique.genes.all' to create a binary vector 0 = not in module; 1 = in module
+    ModLoop_boolean  <- as.integer(GO_unique.genes.all%in%(ModuleLoop$geneSymbol)) # Day 0 - Primary - Upregulated DEGs
+    names(ModLoop_boolean)=GO_unique.genes.all
+    # Calculate Probability Weighting Function
+    pwf              <- nullp(ModLoop_boolean,  id=GO_unique.genes.all, bias.data=length_vector) # weight vector by length of gene
+    # Run oseq
+    Run_goseq        <- goseq(pwf, GO_unique.genes.all, gene2cat=GO.terms, test.cats=c("GO:CC", "GO:BP", "GO:MF"), method="Wallenius", use_genes_without_cat=TRUE)
+    # 
+    Enrich.05                   <- Run_goseq$category[Run_goseq$over_represented_pvalue<.05]
+    Enrich.05_DF                <- data.frame(Enrich.05)
+    colnames(Enrich.05_DF)      <- c("category")
+    
+    Enrich.05_DF_merge          <- merge(Enrich.05_DF, Run_goseq, by="category")
+    Enrich.05_DF_merge          <- Enrich.05_DF_merge[order(Enrich.05_DF_merge$ontology, Enrich.05_DF_merge$over_represented_pvalue, -Enrich.05_DF_merge$numDEInCat),]
+    Enrich.05_DF_merge$term     <- as.factor(Enrich.05_DF_merge$term)
+    Enrich.05_DF_merge$modColor <- modColor
+    Enrich.05_DF_merge$Day      <- "Day1"
+    
+    Enrich.05_DF_merge_filtered <- Enrich.05_DF_merge %>% filter(!(numDEInCat<2 & ontology == "BP"), !(numDEInCat<2 & ontology == "MF"))
+    
+    GO.Day1 <- rbind(GO.Day1,Enrich.05_DF_merge_filtered) #bind to a cumulative list dataframe
+    # print(GO.Day0) # print to monitor progress
+
+}
+GO.Day1_FINAL <- GO.Day1 %>% 
+                  na.omit() %>% 
+                  dplyr::filter(ontology %in% c("MF", "BP"))
+#write csv
+write.csv(GO.Day1_FINAL, "C:/Users/samjg/Documents/Github_repositories/Cvirginica_KM_paper/RAnalysis/Output/Day1/Day1_GOEntrichment.csv")
+```
+
+```{r}
+
+GO_Day0 <- read.csv(file = "C:/Users/samjg/Documents/Github_repositories/Cvirginica_KM_paper/RAnalysis/Output/Day0/GOEnrichment/Day0_GOEnrichment.csv", h = T, sep = ",")
+library('tidytext')
+
+GO_Day0_BP <- GO_Day0 %>%  
+                  dplyr::filter(ontology %in% ('BP')) %>% 
+                  dplyr::filter((-log10(over_represented_pvalue)) > 2) %>% #only p vlaues < 0.01
+                  ggplot(aes(x=reorder_within(modColor, (-log10(over_represented_pvalue)), term), y=-log10(over_represented_pvalue))) +
+                  geom_segment( aes(x=reorder_within(modColor, (-log10(over_represented_pvalue)), term) ,
+                                    xend=reorder_within(modColor, (-log10(over_represented_pvalue)), term), 
+                                    y=1, 
+                                    yend=-log10(over_represented_pvalue)), 
+                                color="grey95", 
+                                size = 2) +
+                  geom_point(aes(size = numDEInCat, fill = modColor), 
+                             shape = 21, # filled circles 
+                             colour = "grey70") +
+                  coord_flip() +
+                  theme(
+                    panel.grid.minor.y = element_blank(),
+                    panel.grid.major.y = element_blank(),
+                    legend.position="bottom") +
+                  xlab("") +
+                  ylab("") +
+                  ggtitle("Biological Process: Day 1") +
+                  #geom_label(aes(x = 0.5, y = 0.5, label = paste(num_up, "DEGs"))) +
+                  theme_classic() + #Set background color 
+                  theme(panel.border = element_blank(), # Set border
+                        panel.grid.major = element_blank(), #Set major gridlines
+                        panel.grid.minor = element_blank(), #Set minor gridlines
+                        axis.line = element_line(colour = "black"), #Set axes color
+                        plot.background=element_blank()) + #Set the plot background #set title attributes
+                  #geom_hline(yintercept=0.25, linetype="dashed",  color = "black", size=2) +
+                  facet_wrap(modColor ~., scales="free_y", ncol= 1, strip.position="right")
+GO_Day0_BP
+
+GO_Day0_MF <- GO_Day0 %>%  
+                  dplyr::filter(ontology %in% ('MF')) %>% 
+                  dplyr::filter((-log10(over_represented_pvalue)) > 2) %>% #only p vlaues < 0.01
+                  ggplot(aes(x=reorder_within(modColor, (-log10(over_represented_pvalue)), term), y=-log10(over_represented_pvalue))) +
+                  geom_segment( aes(x=reorder_within(modColor, (-log10(over_represented_pvalue)), term) ,
+                                    xend=reorder_within(modColor, (-log10(over_represented_pvalue)), term), 
+                                    y=1, 
+                                    yend=-log10(over_represented_pvalue)), 
+                                color="grey95", 
+                                size = 3) +
+                  geom_point(aes(size = numDEInCat, fill = modColor), 
+                             shape = 21, # filled circles 
+                             colour = "grey70") +
+                  coord_flip() + 
+                  theme(
+                    panel.grid.minor.y = element_blank(),
+                    panel.grid.major.y = element_blank(),
+                    legend.position="bottom") +
+                  xlab("") +
+                  ylab("") +
+                  ggtitle("Molecular Function: Day 1") +
+                  #geom_label(aes(x = 0.5, y = 0.5, label = paste(num_up, "DEGs"))) +
+                  theme_classic() + #Set background color 
+                  theme(panel.border = element_blank(), # Set border
+                        panel.grid.major = element_blank(), #Set major gridlines
+                        panel.grid.minor = element_blank(), #Set minor gridlines
+                        axis.line = element_line(colour = "black"), #Set axes color
+                        plot.background=element_blank()) + #Set the plot background #set title attributes
+                  #geom_hline(yintercept=0.25, linetype="dashed",  color = "black", size=2) +
+                  facet_wrap(modColor ~., scales="free_y", ncol= 1, strip.position="right")
+
+pdf("C:/Users/samjg/Documents/Github_repositories/Cvirginica_KM_paper/RAnalysis/Output/Day0/GOEnrichment/BiologicalProcess_SegmentPlot.pdf", height =12, width = 8)
+GO_Day0_BP
+dev.off()
+
+pdf("C:/Users/samjg/Documents/Github_repositories/Cvirginica_KM_paper/RAnalysis/Output/Day0/GOEnrichment/MolecularFunction_SegmentPlot.pdf", height =12, width = 8)
+GO_Day0_MF
+dev.off()
+
+```
+
+
+
+```{r}
+
+GO_Day1 <- read.csv(file = "C:/Users/samjg/Documents/Github_repositories/Cvirginica_KM_paper/RAnalysis/Output/Day1/GOEnrichment/Day1_GOEnrichment.csv", h = T, sep = ",")
+library('tidytext')
+
+GO_Day1_BP <- GO_Day1 %>%  
+                  dplyr::filter(ontology %in% ('BP')) %>% 
+                  dplyr::filter((-log10(over_represented_pvalue)) > 2) %>% #only p vlaues < 0.01
+                  ggplot(aes(x=reorder_within(modColor, (-log10(over_represented_pvalue)), term), y=-log10(over_represented_pvalue))) +
+                  geom_segment( aes(x=reorder_within(modColor, (-log10(over_represented_pvalue)), term) ,
+                                    xend=reorder_within(modColor, (-log10(over_represented_pvalue)), term), 
+                                    y=1, 
+                                    yend=-log10(over_represented_pvalue)), 
+                                color="grey95", 
+                                size = 3) +
+                  geom_point(aes(size = numDEInCat, fill = modColor), 
+                             shape = 21, # filled circles 
+                             colour = "grey70") +
+                  coord_flip() + 
+                  theme(
+                    panel.grid.minor.y = element_blank(),
+                    panel.grid.major.y = element_blank(),
+                    legend.position="bottom") +
+                  xlab("") +
+                  ylab("") +
+                  ggtitle("Biological Process: Day 1") +
+                  #geom_label(aes(x = 0.5, y = 0.5, label = paste(num_up, "DEGs"))) +
+                  theme_classic() + #Set background color 
+                  theme(panel.border = element_blank(), # Set border
+                        panel.grid.major = element_blank(), #Set major gridlines
+                        panel.grid.minor = element_blank(), #Set minor gridlines
+                        axis.line = element_line(colour = "black"), #Set axes color
+                        plot.background=element_blank()) + #Set the plot background #set title attributes
+                  #geom_hline(yintercept=0.25, linetype="dashed",  color = "black", size=2) +
+                  facet_wrap(modColor ~., scales="free_y", ncol= 1, strip.position="right")
+
+
+GO_Day1_MF <- GO_Day1 %>%  
+                  dplyr::filter(ontology %in% ('MF')) %>%
+                  dplyr::filter((-log10(over_represented_pvalue)) > 2) %>% #only p vlaues < 0.01
+                  ggplot(aes(x=reorder_within(modColor, (-log10(over_represented_pvalue)), term), y=-log10(over_represented_pvalue))) +
+                  geom_segment( aes(x=reorder_within(modColor, (-log10(over_represented_pvalue)), term) ,
+                                    xend=reorder_within(modColor, (-log10(over_represented_pvalue)), term), 
+                                    y=1, 
+                                    yend=-log10(over_represented_pvalue)), 
+                                color="grey95", 
+                                size = 3) +
+                  geom_point(aes(size = numDEInCat, fill = modColor), 
+                             shape = 21, # filled circles 
+                             colour = "grey70") +
+                  coord_flip() + 
+                  theme(
+                    panel.grid.minor.y = element_blank(),
+                    panel.grid.major.y = element_blank(),
+                    legend.position="bottom") +
+                  xlab("") +
+                  ylab("") +
+                  ggtitle("Molecular Function: Day 1") +
+                  #geom_label(aes(x = 0.5, y = 0.5, label = paste(num_up, "DEGs"))) +
+                  theme_classic() + #Set background color 
+                  theme(panel.border = element_blank(), # Set border
+                        panel.grid.major = element_blank(), #Set major gridlines
+                        panel.grid.minor = element_blank(), #Set minor gridlines
+                        axis.line = element_line(colour = "black"), #Set axes color
+                        plot.background=element_blank()) + #Set the plot background #set title attributes
+                  #geom_hline(yintercept=0.25, linetype="dashed",  color = "black", size=2) +
+                  facet_wrap(modColor ~., scales="free_y", ncol= 1, strip.position="right")
+
+pdf("C:/Users/samjg/Documents/Github_repositories/Cvirginica_KM_paper/RAnalysis/Output/Day1/GOEnrichment/BiologicalProcess_SegmentPlot.pdf", height =12, width = 8)
+GO_Day1_BP
+dev.off()
+
+pdf("C:/Users/samjg/Documents/Github_repositories/Cvirginica_KM_paper/RAnalysis/Output/Day1/GOEnrichment/MolecularFunction_SegmentPlot.pdf", height =12, width = 8)
+GO_Day1_MF
+dev.off()
+
+```
+
+

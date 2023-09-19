@@ -1,0 +1,133 @@
+"","Day","modColor","ontology","term","category","over_represented_pvalue","under_represented_pvalue","numDEInCat","numInCat"
+"1","Day1","greenyellow","BP","ribosome biogenesis","GO:0042254",2.41798549910901e-25,1,61,212
+"2","Day1","greenyellow","BP","translation","GO:0006412",2.96543947304348e-23,1,58,215
+"3","Day1","greenyellow","BP","biosynthetic process","GO:0009058",7.86197567653513e-05,0.999948126505103,125,1673
+"4","Day1","greenyellow","BP","cellular nitrogen compound metabolic process","GO:0034641",9.12899224683252e-05,0.999941454352986,107,1387
+"5","Day1","greenyellow","BP","generation of precursor metabolites and energy","GO:0006091",0.00082149728384771,0.999709674267568,17,131
+"6","Day1","greenyellow","BP","carbohydrate metabolic process","GO:0005975",0.00380423577923226,0.997988316269961,30,346
+"7","Day1","greenyellow","BP","catabolic process","GO:0009056",0.00387211761341551,0.997840058341225,35,419
+"8","Day1","greenyellow","BP","small molecule metabolic process","GO:0044281",0.00474745218197596,0.997148714575233,43,536
+"9","Day1","greenyellow","BP","biological process involved in symbiotic interaction","GO:0044403",0.0222375839939987,0.999022422264233,2,4
+"10","Day1","greenyellow","BP","cell wall organization or biogenesis","GO:0071554",0.0247429804962726,0.995422751623035,4,20
+"11","Day1","greenyellow","BP","transmembrane transport","GO:0055085",0.0382012082921438,0.978026936088337,21,268
+"12","Day1","greenyellow","BP","homeostatic process","GO:0042592",0.0422539185545659,0.979291421585949,13,144
+"13","Day1","greenyellow","BP","tRNA metabolic process","GO:0006399",0.0493645987705851,0.976910950642066,11,121
+"14","Day1","greenyellow","MF","structural constituent of ribosome","GO:0003735",4.58722367810478e-27,1,54,150
+"15","Day1","greenyellow","MF","oxidoreductase activity","GO:0016491",2.61015174025655e-11,1,94,869
+"16","Day1","greenyellow","MF","peptidase activity","GO:0008233",0.00105909278308466,0.999383223728038,51,641
+"17","Day1","greenyellow","MF","RNA binding","GO:0003723",0.00178373087621922,0.999143527594146,27,281
+"18","Day1","greenyellow","MF","hydrolase activity, acting on carbon-nitrogen (but not peptide) bonds","GO:0016810",0.00261220325604319,0.999167266708039,12,87
+"19","Day1","greenyellow","MF","structural molecule activity","GO:0005198",0.00866316490900364,0.997096795017171,10,84
+"20","Day1","greenyellow","MF","DNA binding","GO:0003677",0.0110075172429845,0.992318065173222,68,955
+"21","Day1","greenyellow","MF","rRNA binding","GO:0019843",0.0142858653762138,0.998660060353884,3,9
+"22","Day1","greenyellow","MF","isomerase activity","GO:0016853",0.0180240051118648,0.99323566030661,10,85
+"23","Day1","greenyellow","MF","methyltransferase activity","GO:0008168",0.0233216635609565,0.989154291045241,14,145
+"24","Day1","greenyellow","MF","translation factor activity, RNA binding","GO:0008135",0.025463115714918,0.991941906772565,7,53
+"25","Day1","greenyellow","MF","DNA-binding transcription factor activity","GO:0003700",0.0331668974880116,0.980201109953369,25,324
+"26","Day1","greenyellow","MF","GTPase activity","GO:0003924",0.039610779270636,0.977176381270821,21,242
+"27","Day1","green","BP","protein folding","GO:0006457",1.42229214712775e-14,1,21,68
+"28","Day1","green","BP","cellular nitrogen compound metabolic process","GO:0034641",4.7740146240944e-08,1,96,1387
+"29","Day1","green","BP","biosynthetic process","GO:0009058",7.48683561875068e-08,1,111,1673
+"30","Day1","green","BP","cytoskeleton organization","GO:0007010",2.55783768279612e-07,0.999999931631182,26,172
+"31","Day1","green","BP","protein targeting","GO:0006605",4.11049540786702e-06,0.999999586546466,9,38
+"32","Day1","green","BP","cellular component assembly","GO:0022607",1.31956268050163e-05,0.999996739303769,17,123
+"33","Day1","green","BP","vesicle-mediated transport","GO:0016192",1.97640841240601e-05,0.9999927745725,28,275
+"34","Day1","green","BP","membrane organization","GO:0061024",8.92107405391162e-05,0.999992663324609,6,22
+"35","Day1","green","BP","cell cycle","GO:0007049",0.000493740592016897,0.999853947804241,14,111
+"36","Day1","green","BP","protein-containing complex assembly","GO:0065003",0.000499143865769014,0.99982923318299,17,179
+"37","Day1","green","BP","tRNA metabolic process","GO:0006399",0.00115640297925413,0.999641555353487,13,121
+"38","Day1","green","BP","small molecule metabolic process","GO:0044281",0.00168804639179817,0.999095223828939,36,536
+"39","Day1","green","BP","ribonucleoprotein complex assembly","GO:0022618",0.00333279345268526,0.999398803967159,6,40
+"40","Day1","green","BP","sulfur compound metabolic process","GO:0006790",0.0053471967328249,0.998199294223521,11,122
+"41","Day1","green","BP","mitochondrion organization","GO:0007005",0.0058131726367743,0.998284906621025,9,88
+"42","Day1","green","BP","ribosome biogenesis","GO:0042254",0.00995775570838272,0.995796522293049,14,212
+"43","Day1","green","BP","homeostatic process","GO:0042592",0.0116039687644441,0.995233277002047,13,144
+"44","Day1","green","BP","mRNA processing","GO:0006397",0.0190236290909992,0.992714607526692,10,115
+"45","Day1","green","BP","transport","GO:0006810",0.0216434552152196,0.989135919440416,17,223
+"46","Day1","green","BP","nucleobase-containing compound catabolic process","GO:0034655",0.0220989263367731,0.991849088538883,9,100
+"47","Day1","green","MF","unfolded protein binding","GO:0051082",1.44621593147724e-11,1,15,41
+"48","Day1","green","MF","translation factor activity, RNA binding","GO:0008135",6.26734993447545e-09,0.999999999380907,14,53
+"49","Day1","green","MF","RNA binding","GO:0003723",4.6195921191202e-06,0.999998380393717,30,281
+"50","Day1","green","MF","ATP hydrolysis activity","GO:0016887",9.59046599200791e-05,0.999964063948502,25,203
+"51","Day1","green","MF","isomerase activity","GO:0016853",0.00117637779389133,0.999702651543465,10,85
+"52","Day1","green","MF","oxidoreductase activity","GO:0016491",0.00118298991477702,0.999302116374675,52,869
+"53","Day1","green","MF","ligase activity","GO:0016874",0.00120268364836603,0.999606773267929,14,127
+"54","Day1","green","MF","cytoskeletal protein binding","GO:0008092",0.00168664556985101,0.999281234018873,21,207
+"55","Day1","green","MF","DNA-binding transcription factor activity","GO:0003700",0.00325163298500924,0.998434816419312,24,324
+"56","Day1","green","MF","transferase activity, transferring alkyl or aryl (other than methyl) groups","GO:0016765",0.00634919862227321,0.998916493825044,5,36
+"57","Day1","green","MF","ion binding","GO:0043167",0.00901525881286996,0.992605315690164,258,5162
+"58","Day1","green","MF","lipid binding","GO:0008289",0.0273500225117916,0.987799559412568,12,157
+"59","Day1","green","MF","acyltransferase activity","GO:0016746",0.0316272504619835,0.986807608080474,10,128
+"60","Day1","brown","BP","cellular nitrogen compound metabolic process","GO:0034641",3.15071635775219e-09,1,227,1387
+"61","Day1","brown","BP","cytoskeleton organization","GO:0007010",2.57543941002229e-07,0.999999899997987,52,172
+"62","Day1","brown","BP","vesicle-mediated transport","GO:0016192",3.51003494074633e-07,1,64,275
+"63","Day1","brown","BP","cellular component assembly","GO:0022607",1.24137776845204e-05,0.999995454504739,33,123
+"64","Day1","brown","BP","ribonucleoprotein complex assembly","GO:0022618",0.000148351501854833,0.999967321023282,13,40
+"65","Day1","brown","BP","sulfur compound metabolic process","GO:0006790",0.000180521598768618,0.99993024498065,26,122
+"66","Day1","brown","BP","mitochondrion organization","GO:0007005",0.000212888468491587,0.999927200379605,21,88
+"67","Day1","brown","BP","catabolic process","GO:0009056",0.000281297576204257,0.999830638472997,76,419
+"68","Day1","brown","BP","protein maturation","GO:0051604",0.00122276607307568,0.999692387683264,11,39
+"69","Day1","brown","BP","mRNA processing","GO:0006397",0.00202280298193535,0.999088552967791,25,115
+"70","Day1","brown","BP","lipid metabolic process","GO:0006629",0.00461049862843407,0.99706383404316,58,357
+"71","Day1","brown","BP","small molecule metabolic process","GO:0044281",0.00479785608570728,0.996702059108777,81,536
+"72","Day1","brown","BP","generation of precursor metabolites and energy","GO:0006091",0.00484249921117905,0.997668613013128,24,131
+"73","Day1","brown","BP","biosynthetic process","GO:0009058",0.00526888923368283,0.99576659339221,227,1673
+"74","Day1","brown","BP","biological_process","GO:0008150",0.00708289262662826,0.995135133787314,76,426
+"75","Day1","brown","BP","vacuolar transport","GO:0007034",0.0107378683290529,0.997748576100652,6,20
+"76","Day1","brown","BP","cytoskeleton-dependent intracellular transport","GO:0030705",0.0267196471565854,0.994659192433729,5,12
+"77","Day1","brown","MF","cytoskeletal protein binding","GO:0008092",4.17142088060654e-12,1,72,207
+"78","Day1","brown","MF","kinase activity","GO:0016301",1.34570129569082e-08,1,132,580
+"79","Day1","brown","MF","lipid binding","GO:0008289",1.87594011546142e-05,0.999992352310912,38,157
+"80","Day1","brown","MF","oxidoreductase activity","GO:0016491",0.000123365425464151,0.999917605327227,128,869
+"81","Day1","brown","MF","enzyme binding","GO:0019899",0.000163013009412826,0.999920346718341,47,166
+"82","Day1","brown","MF","DNA-binding transcription factor activity","GO:0003700",0.000365905213949893,0.999793700297876,58,324
+"83","Day1","brown","MF","GTPase activity","GO:0003924",0.00071377186051516,0.99963384093253,39,242
+"84","Day1","brown","MF","enzyme regulator activity","GO:0030234",0.00213883101716091,0.998713283249327,54,329
+"85","Day1","brown","MF","isomerase activity","GO:0016853",0.0122775392629993,0.994574209544886,16,85
+"86","Day1","brown","MF","ion binding","GO:0043167",0.0198151073697225,0.982254308166692,712,5162
+"87","Day1","brown","MF","ATP hydrolysis activity","GO:0016887",0.0343195423044322,0.977027874765677,45,203
+"88","Day1","blue","BP","cellular nitrogen compound metabolic process","GO:0034641",2.52208566196378e-16,1,169,1387
+"89","Day1","blue","BP","biosynthetic process","GO:0009058",3.07377217222646e-13,1,184,1673
+"90","Day1","blue","BP","catabolic process","GO:0009056",2.40931245666607e-11,1,66,419
+"91","Day1","blue","BP","chromosome organization","GO:0051276",1.77436744309759e-10,1,45,225
+"92","Day1","blue","BP","small molecule metabolic process","GO:0044281",1.33442737810114e-09,1,72,536
+"93","Day1","blue","BP","ribosome biogenesis","GO:0042254",2.96393847000292e-09,1,37,212
+"94","Day1","blue","BP","generation of precursor metabolites and energy","GO:0006091",8.05125684811294e-09,0.999999998153011,28,131
+"95","Day1","blue","BP","mRNA processing","GO:0006397",2.15483366695234e-08,0.999999995133633,26,115
+"96","Day1","blue","BP","protein folding","GO:0006457",2.77225683453872e-06,0.99999945660115,16,68
+"97","Day1","blue","BP","nucleobase-containing compound catabolic process","GO:0034655",2.43710810047461e-05,0.999993256705852,19,100
+"98","Day1","blue","BP","cellular amino acid metabolic process","GO:0006520",5.25208670398958e-05,0.999969851914063,76,700
+"99","Day1","blue","BP","translation","GO:0006412",5.32825894119867e-05,0.999979166613703,29,215
+"100","Day1","blue","BP","cellular protein modification process","GO:0006464",6.71870444878473e-05,0.999954834119689,140,1476
+"101","Day1","blue","BP","carbohydrate metabolic process","GO:0005975",6.75004891421181e-05,0.999968102349216,42,346
+"102","Day1","blue","BP","chromosome segregation","GO:0007059",0.000237674538633866,0.999945396501641,12,53
+"103","Day1","blue","BP","mitotic nuclear division","GO:0140014",0.000446477809942783,0.999928736645251,8,28
+"104","Day1","blue","BP","vacuolar transport","GO:0007034",0.0010148567742903,0.99986997501207,6,20
+"105","Day1","blue","BP","cell division","GO:0051301",0.00313919975664359,0.999385458274043,7,27
+"106","Day1","blue","BP","cellular component assembly","GO:0022607",0.00335634370325795,0.998645996906498,17,123
+"107","Day1","blue","BP","membrane organization","GO:0061024",0.00934644059689427,0.998344225064118,5,22
+"108","Day1","blue","BP","protein-containing complex assembly","GO:0065003",0.00945674229342407,0.995403879451306,20,179
+"109","Day1","blue","BP","mitotic cell cycle","GO:0000278",0.0151981009726508,0.996337821532275,6,29
+"110","Day1","blue","BP","tRNA metabolic process","GO:0006399",0.0226633324666924,0.989565092911233,14,121
+"111","Day1","blue","BP","lipid metabolic process","GO:0006629",0.0240762639167145,0.984988125304654,33,357
+"112","Day1","blue","BP","cell morphogenesis","GO:0000902",0.0293461447793486,0.994414790092432,4,17
+"113","Day1","blue","BP","mitochondrion organization","GO:0007005",0.0456547856691479,0.979984882541536,10,88
+"114","Day1","blue","MF","RNA binding","GO:0003723",8.28703446885258e-07,0.999999689191714,42,281
+"115","Day1","blue","MF","kinase activity","GO:0016301",6.14115221568065e-06,0.999996995022118,70,580
+"116","Day1","blue","MF","structural constituent of ribosome","GO:0003735",6.914351130147e-06,0.999997892199689,24,150
+"117","Day1","blue","MF","isomerase activity","GO:0016853",1.57360576998492e-05,0.999996170649896,17,85
+"118","Day1","blue","MF","DNA binding","GO:0003677",2.87125710723818e-05,0.999982798270367,95,955
+"119","Day1","blue","MF","oxidoreductase activity","GO:0016491",3.14552999538601e-05,0.99998163014886,85,869
+"120","Day1","blue","MF","methyltransferase activity","GO:0008168",4.66209702354908e-05,0.99998434866954,23,145
+"121","Day1","blue","MF","acyltransferase activity","GO:0016746",0.000478892231830212,0.999828752179967,19,128
+"122","Day1","blue","MF","peptidase activity","GO:0008233",0.00244399980632159,0.998446953284425,62,641
+"123","Day1","blue","MF","GTPase activity","GO:0003924",0.00337759856717151,0.998330043162909,26,242
+"124","Day1","blue","MF","unfolded protein binding","GO:0051082",0.00365599642261366,0.999131949538666,8,41
+"125","Day1","blue","MF","transferase activity, transferring alkyl or aryl (other than methyl) groups","GO:0016765",0.00442209033691474,0.999038605562187,7,36
+"126","Day1","blue","MF","ATP hydrolysis activity","GO:0016887",0.0062349418615216,0.996785521718992,26,203
+"127","Day1","blue","MF","enzyme binding","GO:0019899",0.00778330410964246,0.996167226586468,22,166
+"128","Day1","blue","MF","hydrolase activity, acting on carbon-nitrogen (but not peptide) bonds","GO:0016810",0.0167759939484909,0.993451141137182,11,87
+"129","Day1","blue","MF","DNA-binding transcription factor activity","GO:0003700",0.0174521300041845,0.989574418938287,31,324
+"130","Day1","blue","MF","mRNA binding","GO:0003729",0.0300932780886248,0.994172805841357,4,18
+"131","Day1","blue","MF","nuclease activity","GO:0004518",0.0398227668105893,0.978674976379442,17,160
+"132","Day1","blue","MF","histone binding","GO:0042393",0.0405613033885483,0.997516311594484,2,4
