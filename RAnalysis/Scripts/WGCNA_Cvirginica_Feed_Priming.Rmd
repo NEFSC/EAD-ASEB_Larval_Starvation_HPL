@@ -28,7 +28,7 @@ library(GSEABase)
 library(data.table)
 library(stringr)
 # SET WORKING DIRECTORY
-knitr::opts_knit$set(root.dir = "C:/Users/samjg/Documents/Github_repositories/Cvirginica_KM_paper/RAnalysis") # sets the working 
+knitr::opts_knit$set(root.dir = "C:/Users/samjg/Documents/Github_repositories/EAD-ASEB-Larval_Starvation_HPL/RAnalysis") # sets the working 
 ```
 
 
@@ -67,7 +67,7 @@ Day1_ModuleMembership  <- read.csv(file="Output/Day1/Day1.WGCNA_ModulMembership.
 
 ## Objectives: isolate genes that responded to food from the master WGCNA file on timepoint 3 (day0)
 and overlay them into the subseqent timepoint, quantify the number present and in which modules they are represented
-```{r less exploreshall we!}
+```{r less explore shall we!}
 
 # filter the master file of the first timepoint
 Starved_HighExp_T1 <- Day0_ModuleMembership %>% dplyr::filter(moduleColor %in% 'blue')
@@ -83,6 +83,71 @@ length(Starved_LowExp_ID) # 5236 - number of genes! damn thats a lot..
 
 # use these geneIDs to filter the subseqent timepoint - quanitfy the number of genes and which models they are in
 Starved_HighExp_T2 <-  Day1_ModuleMembership %>% dplyr::filter(Cvirginica_GeneID %in% Starved_HighExp_T1$Cvirginica_GeneID)
+nrow(Starved_HighExp_T1) - nrow(Starved_HighExp_T2) # 632 are not present in the WGCNA data for the subseqent timepoint
+100 - (  ((nrow(Starved_HighExp_T1) - nrow(Starved_HighExp_T2)) / nrow(Starved_HighExp_T1) )*100 ) # 86.09155 found in T2!
+
+
+
+Starved_LowExp_T2 <-  Day1_ModuleMembership %>% dplyr::filter(Cvirginica_GeneID %in% Starved_LowExp_T1$Cvirginica_GeneID)
+nrow(Starved_LowExp_T1) - nrow(Starved_LowExp_T2) # 143 are not present in the WGCNA data for the subseqent timepoint
+100 - (  ((nrow(Starved_LowExp_T1) - nrow(Starved_LowExp_T2)) / nrow(Starved_LowExp_T1) )*100 ) # 97.26891 found in T2!
+
+
+
+# First, how many genes were in these modules in T2 ('Day1') to start?
+T2_summary <- as.data.frame(
+                    Day1_ModuleMembership %>% dplyr::select(moduleColor ,Cvirginica_GeneID) %>% 
+                          na.omit() %>% 
+                          dplyr::group_by(moduleColor) %>% 
+                          dplyr::summarise(n= n())  )
+
+
+# High Expression starved - overlay into the T2_summary to see where these genes are expressed!
+T2_StarvationHighExp <- as.data.frame( 
+                  Starved_HighExp_T2 %>% dplyr::select(moduleColor, Cvirginica_GeneID) %>% 
+                          na.omit() %>% 
+                          dplyr::group_by(moduleColor) %>% 
+                          dplyr::summarise(n_HighExp_Starved= n())  )
+
+Starvation_HighExp_Prop_T2 <- merge(T2_summary, T2_StarvationHighExp, by ="moduleColor") %>% dplyr::mutate(Percent_HighExpStarved = (n_HighExp_Starved / (n+n_HighExp_Starved))*100 )
+Starvation_HighExp_Prop_T2
+
+# High Expression starved - overlay into the T2_summary to see where these genes are expressed!
+T2_StarvationLowExp <- as.data.frame( 
+                  Starved_LowExp_T2 %>% dplyr::select(moduleColor, Cvirginica_GeneID) %>% 
+                          na.omit() %>% 
+                          dplyr::group_by(moduleColor) %>% 
+                          dplyr::summarise(n_LowExp_Starved= n())  )
+
+Starvation_LowExp_Prop_T2 <- merge(T2_summary, T2_StarvationLowExp, by ="moduleColor") %>% dplyr::mutate(Percent_LowExpStarved = (n_LowExp_Starved / (n+n_LowExp_Starved))*100 )
+Starvation_LowExp_Prop_T2
+
+
+# Although no directly clear evidence of module-specific carryoer here. we do have something intersting! 
+# High Exp genes under starvation at timepoint1 have the highest proportion of module 'cyan' (34.8%) - the low Exp genes under starvation make up the lowest propotion of module 'cyan' (17.8%)
+# module cyan is uniqqly associated wit high expession of oysters that were starved! 
+
+
+
+View(Starved_HighExp_T2 %>% dplyr::filter(moduleColor %in% 'cyan') %>% dplyr::select(Protein_name) %>% dplyr::arrange(Protein_name))
+```
+
+
+
+## Objectives: isolate genes that responded to food from the master WGCNA file on timepoint 3 (day0)
+and overlay them into the subseqent timepoint, quantify the number present and in which modules they are represented
+```{r less explore shall we!}
+
+# filter the master file of the first timepoint
+Starved_HighExp_T2 <- Day1_ModuleMembership %>% dplyr::filter(moduleColor %in% 'blue')
+
+# we just need the unique idnetifier - lets do gene name
+
+Starved_HighExp_ID_T2 <- Starved_HighExp_T2[,1]
+length(Starved_HighExp_T2) # 4544 - number of genes! damn thats a lot..
+
+# use these geneIDs to filter the subseqent timepoint - quanitfy the number of genes and which models they are in
+Overlap <-  Day0_ModuleMembership %>% dplyr::filter(Cvirginica_GeneID %in% Starved_HighExp_ID_T2$Cvirginica_GeneID)
 nrow(Starved_HighExp_T1) - nrow(Starved_HighExp_T2) # 632 are not present in the WGCNA data for the subseqent timepoint
 100 - (  ((nrow(Starved_HighExp_T1) - nrow(Starved_HighExp_T2)) / nrow(Starved_HighExp_T1) )*100 ) # 86.09155 found in T2!
 

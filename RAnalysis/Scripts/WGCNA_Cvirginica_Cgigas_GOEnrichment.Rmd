@@ -159,7 +159,7 @@ colnames(GO.Day0)    <- c('Day', 'modColor', 'ontology', 'term',
                          'under_represented_pvalue', 'numDEInCat','numInCat') # names for comuns in the for loop
 
 for (i in 1:nrow(Day0_WGCNA_sigmodules)) {
-    modColor         <- Day0_WGCNA_sigmodules[i,1]
+    modColor         <- Day0_WGCNA_sigmodules[3,1]
     loopmodColor_cor <- paste("MM.", modColor, sep = '')
     loopmodColor_p   <- paste("p.MM.", modColor, sep = '')
     ModuleLoop       <- as.data.frame(Day0_ModuleMembership %>% 
