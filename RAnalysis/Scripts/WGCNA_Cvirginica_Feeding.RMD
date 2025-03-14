@@ -21,10 +21,10 @@ library(circlize)
 library(reshape)
 library(ggplot2)
 library(hrbrthemes)
-
+?WGCNA
 # SET WORKING DIRECTORY
 
-knitr::opts_knit$set(root.dir = "C:/Users/samjg/Documents/Github_repositories/Cvirginica_KM_paper/RAnalysis") # sets the working 
+knitr::opts_knit$set(root.dir = "C:/Users/samjg/Documents/Github_repositories/EAD-ASEB-Larval_Starvation_HPL/RAnalysis") # sets the working 
 
 ```
 
@@ -2067,14 +2067,14 @@ for(i in 1:nrow(modcolor)) {
   # merge by common row values 'Sample.Name'
   merged_Expdata_Mod <- merge(d0_rlog_Mod_MELT, Metadata_D0, by ='Sample.ID')
   
-  merged_Expdata_Mod <- merge(d0_rlog_Mod_MELT, Metadata_D0_raw, by ='Sample.ID')
+  merged_Expdata_Mod <- merge(d0_rlog_Mod_MELT, Metadata, by ='Sample.ID')
   
   # mean Exp response table 
   meanEXp_Mod <- merged_Expdata_Mod %>% 
-                  select(c('Sample.ID','rlog_Expression','Treatment', 'Line', 'Group', 
-                           'RR', 'ShellLength', 'AR_DOM', 'IR_C')) %>% 
+                  dplyr::select(c('Sample.ID','rlog_Expression','Treatment', 'Line', 'Group', 
+                           'RR', 'ShellLength', 'AR_DOM', 'IR_C', 'IR_DOM')) %>% 
                   group_by(Sample.ID, Treatment, Line, Group, 
-                           RR, ShellLength, AR_DOM, IR_C) %>%
+                           RR, ShellLength, AR_DOM, IR_C, IR_DOM) %>%
                   dplyr::summarize(mean.rlogExp = mean(rlog_Expression), 
                                    sd.rlogtExp  = sd(rlog_Expression),
                                    na.rm=TRUE)
@@ -2097,14 +2097,14 @@ for(i in 1:nrow(modcolor)) {
                   geom_line(aes(linetype =Treatment)) +
                   geom_point(aes(color = Line)) + 
                   theme_classic()
-  IR_Cplot <- meanEXp_Mod %>% 
+  IR_DOMplot <- meanEXp_Mod %>% 
                   mutate(Line_Treatment = paste0(Line, Treatment, sep='_')) %>% 
-                  ggplot(aes(x=IR_C, y=mean.rlogExp, group = Line_Treatment)) + 
+                  ggplot(aes(x=IR_DOM, y=mean.rlogExp, group = Line_Treatment)) + 
                   geom_line(aes(linetype =Treatment)) +
                   geom_point(aes(color = Line)) + 
                   theme_classic()
   library(ggpubr)
-  ggarrange(RRplot,Lengthplot, ARDOMplot, IR_Cplot, ncol =2, nrow = 2)
+  ggarrange(RRplot,Lengthplot, ARDOMplot, IR_DOMplot, ncol =2, nrow = 2)
   # summarize datasets further by treatment period  =========================================================================================== #
   # remember:this is a mean of a mean!! First we complete mean vst exp by sample id (compiling all red module genes) - next all sample IDs by the treatment period (below
   # I will use these for mean SE plots 
@@ -2278,6 +2278,8 @@ for(i in 1:nrow(modcolor)) {
   # merge by common row values 'Sample.Name'
   merged_Expdata_Mod <- merge(d1_rlog_Mod_MELT, Metadata_D1, by ='Sample.ID')
   
+  merged_Expdata_Mod_phys <- merge(d1_rlog_Mod_MELT, Metadata, by ='Sample.ID') # use to look at raw phys cors
+  
   # mean Exp response table 
   meanEXp_Mod <- merged_Expdata_Mod %>% 
     select(c('Sample.ID','rlog_Expression','Treatment', 'Line', 'Group')) %>% 
@@ -2286,7 +2288,42 @@ for(i in 1:nrow(modcolor)) {
                      sd.rlogtExp = sd(rlog_Expression),
                      na.rm=TRUE)
   
-   
+ # mean Exp response table 
+  meanEXp_Mod_phys <- merged_Expdata_Mod_phys %>% 
+                  dplyr::select(c('Sample.ID','rlog_Expression','Treatment', 'Line', 'Group', 
+                           'RR', 'ShellLength', 'AR_DOM', 'IR_C', 'IR_DOM')) %>% 
+                  group_by(Sample.ID, Treatment, Line, Group, 
+                           RR, ShellLength, AR_DOM, IR_C, IR_DOM) %>%
+                  dplyr::summarize(mean.rlogExp = mean(rlog_Expression), 
+                                   sd.rlogtExp  = sd(rlog_Expression),
+                                   na.rm=TRUE)
+  
+  RRplot     <- meanEXp_Mod_phys %>% 
+                  mutate(Line_Treatment = paste0(Line, Treatment, sep='_')) %>% 
+                  ggplot(aes(x=RR, y=mean.rlogExp, group = Line_Treatment)) + 
+                  geom_line(aes(linetype =Treatment)) +
+                  geom_point(aes(color = Line)) + 
+                  theme_classic()
+  Lengthplot <- meanEXp_Mod_phys %>% 
+                  mutate(Line_Treatment = paste0(Line, Treatment, sep='_')) %>% 
+                  ggplot(aes(x=ShellLength, y=mean.rlogExp, group = Line_Treatment)) + 
+                  geom_line(aes(linetype =Treatment)) +
+                  geom_point(aes(color = Line)) + 
+                  theme_classic()
+  ARDOMplot <- meanEXp_Mod_phys %>% 
+                  mutate(Line_Treatment = paste0(Line, Treatment, sep='_')) %>% 
+                  ggplot(aes(x=AR_DOM, y=mean.rlogExp, group = Line_Treatment)) + 
+                  geom_line(aes(linetype =Treatment)) +
+                  geom_point(aes(color = Line)) + 
+                  theme_classic()
+  IR_DOMplot <- meanEXp_Mod_phys %>% 
+                  mutate(Line_Treatment = paste0(Line, Treatment, sep='_')) %>% 
+                  ggplot(aes(x=IR_DOM, y=mean.rlogExp, group = Line_Treatment)) + 
+                  geom_line(aes(linetype =Treatment)) +
+                  geom_point(aes(color = Line)) + 
+                  theme_classic()
+  library(ggpubr)
+  ggarrange(RRplot,Lengthplot, ARDOMplot, IR_DOMplot, ncol =2, nrow = 2) 
   # summarize datasets further by treatment period  =========================================================================================== #
   # remember:this is a mean of a mean!! First we complete mean vst exp by sample id (compiling all red module genes) - next all sample IDs by the treatment period (below
   # I will use these for mean SE plots 
@@ -2409,4 +2446,6 @@ for(i in 1:nrow(modcolor)) {
   dev.off()
   
 }
+
+
 ```
